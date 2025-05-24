@@ -19,10 +19,6 @@ if(!require(tibble)){
 	install.packages("tibble")
 }
 
-if(!require(iptools)){
-	install.packages("iptools")
-}
-
 if(!require(stR)){
 	install.packages("stR")
 }
@@ -37,6 +33,13 @@ if(!require(abind)) {
 	install.packages("abind")
 }
 
+install.packages("devtools")
+install.packages("githubinstall")
+install.packages('C:/PhD/DIS9903A/Week 7/iptools-master.zip', lib='C:/Users/pauli/AppData/Local/R/win-library/4.5',repos = NULL)
+install.packages("IP", configure.args="--enable-avx2")
+
+library(IP)
+library(githubinstall)
 library(abind)
 library(stringi)
 library(stringr)             # Load the package
@@ -49,29 +52,67 @@ library(tibble)
 library(ipaddress)
 library(tidyr)
 
-
-setwd("C:/PhD/DIS9903A/Week 7")
+directory <- readline(prompt = "Enter your directory name: ")
+D:print(directory)
+test <- readline(prompt = "Enter the data file to convert: ")
+print(test)
+setwd(directory)
 getwd()
 
 #   read in dataset
-test <- read.csv("test.csv", header = TRUE, na.strings = "")
+test <- read.csv(test, header = TRUE, na.strings = "")
+head(test)
+nrow(test)
+
 time = test$Time
-address = ip_address(test$Source)
-address <- gsub("\\NA", "99.99.99.99", address)
-address <- replace_na(address, "99.99.99.99")
+address <- test$Source
+i <- 0
+for (i in 1:length(address)) {
+   # if address contains letters then chang them to the number
+   has_letters <- str_detect(address[i], "[a-zA-Z]")
+   temp <- address[i]
+   if (has_letters) {
+      # convert to ascii represenatative
+      address[i] <- chartr("abcdef", "101112131415", temp)
+   }
+   else
+      next
+}
+print(address)
+address <- gsub("\\:", ".", address) 
 Source_address <- gsub("\\.", "", address)
+print(Source_address)
 
-destination = ip_address(test$Destination)
-destination <- gsub("\\NA", "99.99.99.99", destination )
-destination <- replace_na(destination , "99.99.99.99")
-Destination_address <- gsub("\\.", "", destination )
+destination <- test$Destination
+destination <- gsub("\\Broadcast", "255.255.255.255", destination) 
+destination <- gsub("\\Spanning-tree-\\(for\\-bridges\\)\\_00", "10.10.10.10", destination)
+destination <- replace_na(destination , "999.999.999.999")
+i <- 0
+for (i in 1:length(destination )) {
+   # if address contains letters then chang them to the number
+   has_letters <- str_detect(destination[i], "[a-zA-Z]")
+   temp <- destination[i]
+   if (has_letters) {
+      # convert to ascii represenatative
+      destination[i] <- chartr("abBcdef", "101112131415", temp)
+   }
+   else
+      next
+}
+destination <- gsub("\\.", "", destination )
+Destination_address <- gsub("\\:", "", destination )
 
-protocol = test$Protocol
-protocol <- gsub("\\DNS", 1, protocol )
-protocol <- gsub("\\TCP", 2, protocol )
-protocol <- gsub("\\ARP", 3, protocol )
-protocol <- gsub("\\OpenFlow", 4, protocol )
-protocol <- gsub("\\M1", 5, protocol )
+protocol_converted = test$Protocol
+protocol_converted <- gsub("\\DNS", 1001, protocol_converted )
+protocol_converted <- gsub("\\TCP", 2001, protocol_converted )
+protocol_converted <- gsub("\\ARP", 3002, protocol_converted )
+protocol_converted <- gsub("\\OpenFlow", 4004, protocol_converted )
+protocol_converted <- gsub("\\M1", 5005, protocol_converted )
+protocol_converted <- gsub("\\STP", 6006, protocol_converted )
+protocol_converted <- gsub("\\DHCP", 7007, protocol_converted )
+protocol_converted <- gsub("\\ICMP", 8008, protocol_converted )
+protocol_converted <- gsub("\\N1", 9009, protocol_converted )
+print(protocol_converted)
 
 # Extract the TCP flags from the info data and the Openflow information
 # Convert the values to numeric data
@@ -208,6 +249,6 @@ Length <- test$Length
 number <- test$No.
 
 # write out to a new csv file
-convert_data <- data.frame(number, time, Source_address, Destination_address, protocol, Length, info_converted)
+convert_data <- data.frame(number, time, Source_address, Destination_address, protocol_converted, Length, info_converted)
 write.csv(convert_data, "test_convert.csv")
 print("Done with data preprocessing")
