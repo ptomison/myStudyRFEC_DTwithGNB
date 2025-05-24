@@ -9,28 +9,22 @@ Created on Thu May  8 20:50:53 2025
 import pandas as pd
 #import matplotlib.pyplot as plt
 import os
-import csv
-import sys
-import re
+#import csv
+#import sys
+#import re
 import numpy as np
 
-from sklearn.model_selection import StratifiedKFold, KFold
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import StratifiedKFold, KFold, train_test_split, cross_val_score
+from skmultilearn.model_selection import iterative_train_test_split
 from sklearn.feature_selection import RFECV
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.ensemble import RandomForestRegressor
-from sklearn import linear_model
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import StackingClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, StackingClassifier, VotingClassifier
+#from sklearn import linear_model
+from sklearn.linear_model import LogisticRegression #, LinearRegression, 
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.svm import SVR
 from sklearn.datasets import make_classification
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
-from sklearn.model_selection import train_test_split 
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score
 from sklearn.naive_bayes import GaussianNB
-from sklearn.ensemble import VotingClassifier
 
 
 
@@ -60,13 +54,16 @@ class RFECV_EXPERIMENT:
         return data
     
     def standardize_data(self, data):
+        
+        print("Standardizing the data")
               
         from scipy import stats
         
         # Useing the R data_preprocessing generated data
-        convert_dict = {'time': float, 'Source_address': int, 'Destination_address': int, 'protocol': int, 'Length': int, 'info_converted': int}
+        #convert_dict = {'time': float, 'Source_address': int, 'Destination_address': int, 'protocol': int, 'Length': int, 'info_converted': int}
+        #convert_dict = {'time': float, 'Source_address': int, 'Destination_address': int, 'protocol_converted': int, 'Length': int, 'info_converted': int}
         # Using the IMB SPSS data preprocessing generated data
-        #convert_dict = {'Time': float, 'Length': int,'Source_Scaled': int, 'Destination_Scaled': int, 'Protocol_Scaled': int,  'Info_Scaled': int}
+        convert_dict = {'Time': float, 'Source_address': int, 'Destination_address': int, 'protocol_convert': int, 'Length': int, 'info_converted': int}
         
         names = data.columns 
         data = data.fillna(0)
@@ -79,54 +76,51 @@ class RFECV_EXPERIMENT:
         return data_new_scaled
                     
     def extract_features(self, data):
-        #print(data)
-        # using the data_new_scaled values from the previous function
+        print("Extracting the features using RFECV")
         # first drop the first two columns of the dataset since it just contains the number of elements
-        y_col = "Unnamed: 0"
+        #y_col = "Unnamed: 0"
         
-        y = data[y_col]
+        # = data[y_col]
         
-        data = data.drop([y_col], axis = 1)
+        #data = data.drop([y_col], axis = 1)
         
-        y1_col = "number"
+        #y1_col = "number"
+        y1_col = "No"
         
         y = data[y1_col]
         
         y = y.to_frame()
         
-        
-        y_col = "info_converted"
+        #y_col = "info_converted"
+        y_col = "Source_address"
         #y_col = "No"  # Use this only when using the IMB SPPS data instead of the R data preprocessed data
         y = data[y_col]
         #print(y)
         
         X = data.drop([y_col], axis = 1)
         
-        #X = np.array(X, dtype=float)
-        #y = np.array(y, dtype=float)
-        y = np.ravel(y)
-        
-        #print(y)
-        
-        X, y = make_classification(len(X), n_features=20, n_informative=10, random_state=42)
-
         model = RandomForestClassifier(random_state=42)
        
+        # Split the data for the RF model 
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3)
+        
+        print("Making Data Classification Complete")
+   
         # Setup the cross_validation
         cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)  # Cross-validation
-        #kf = KFold(n_splits=5, shuffle=True, random_state=42)  # Cross-validation
-        #kf.get_n_splits(X,y)
-        #print(kf)
+        kf = KFold(n_splits=5, shuffle=True, random_state=42)  # Cross-validation
         
         #Initializing RFE model
-        rfecv = RFECV(estimator=model, step=1, min_features_to_select=1, scoring='precision', cv=cv, n_jobs=-1)
+        rfecv = RFECV(estimator=model, step=1, min_features_to_select=1, scoring='accuracy', cv=cv, n_jobs=-1)
         
-        #features = rfecv.fit_transform(X, y)
+        #features = rfecv.fit(X_train, y_train)
+        features = rfecv.fit_transform(X, y)
+        #print(features)
         
-        features = rfecv.fit(X,y)
+        print("RFECV model fitting complete")
         
-        # Step 5: Evaluate the model using cross_val_score
-        scores = cross_val_score(rfecv.estimator_, X, y, cv=cv, scoring='precision')
+        # Step 5: Evaluate the RFECV model using StrartifiedKFold cross_val_score
+        scores = cross_val_score(rfecv.estimator_, X, y, cv=cv, scoring='accuracy')
         # Step 6: Print results
         print(f"Optimal number of features: {rfecv.n_features_}")
         print(f"Selected features: {rfecv.support_}")
@@ -134,13 +128,14 @@ class RFECV_EXPERIMENT:
         print(f"Mean accuracy: {scores.mean():.4f}")
         print(f"RFECV ranking: {rfecv.ranking_}")
         
-        #selected_features = X[:, rfecv.support_]
-        #print("Selected Features:", selected_features.tolist())
-        
-        # Evaluate the RF  model
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3)
-        
-        model.fit(X,y)
+        # Step 5a: Evaluate the RFECV model using KFold cross_val_score
+        scores = cross_val_score(rfecv.estimator_, X, y, cv=kf, scoring='accuracy')
+        # Step 6: Print results
+        print(f"KF Optimal number of features: {rfecv.n_features_}")
+        print(f"KF Selected features: {rfecv.support_}")
+        print(f"KF Cross-validation scores: {scores}")
+        print(f"KF Mean accuracy: {scores.mean():.4f}")
+        print(f"KF RFECV ranking: {rfecv.ranking_}")
         
         model.fit(X_train, y_train)
         
@@ -167,13 +162,15 @@ class DT_with_GNB:
         self.y = [0]
         
     def decicsionTree(self, data):
-        y_col = "Unnamed: 0"
         
-        y = data[y_col]
+        # Remove the columns with the number listing from the data preprocessing step
+        #y_col = "Unnamed: 0"
         
-        data = data.drop([y_col], axis = 1)
+        #y = data[y_col]
         
-        y1_col = "number"
+        #data = data.drop([y_col], axis = 1)
+        
+        y1_col = "No"
         
         y = data[y1_col]
         
@@ -182,10 +179,12 @@ class DT_with_GNB:
         X = data.drop([y1_col], axis = 1)
         
         y_col = 'Source_address'
+        #y_col = 'protocol_convert'
         #y_col = "info_converted"
         y = data[y_col]
         
         #y = np.ravel(y)
+        #print(y)
         
         #print(type(X))
         #print(type(y))
@@ -201,7 +200,8 @@ class DT_with_GNB:
         print(f"Average F1 score during cross-validation: {np.mean(fOne)}")
 
         # Split dataset into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42, stratify=y)
+        #X_train, y_train, X_test, y_test = iterative_train_test_split(X, y1, test_size = 0.2)
         
         # Decision Tree Classifier
         dt_model = DecisionTreeClassifier(random_state=42)
@@ -215,28 +215,32 @@ class DT_with_GNB:
         
         # Evaluate Decision Tree
         print("Decision Tree Classifier:")
-        print(f"Accuracy: {accuracy_score(y_test, dt_predictions):.4f}")
+        print(f"DT Accuracy: {accuracy_score(y_test, dt_predictions):.4f}")
         print(classification_report(y_test, dt_predictions, zero_division=1.0))
 
         # Evaluate Gaussian Naive Bayes
         print("Gaussian Naive Bayes Classifier:")
-        print(f"Accuracy: {accuracy_score(y_test, gnb_predictions):.4f}")
+        print(f"GNB Accuracy: {accuracy_score(y_test, gnb_predictions):.4f}")
         print(classification_report(y_test, gnb_predictions, zero_division=1.0))
         
         # Combine using VotingClassifier
         voting_clf = VotingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], voting='hard')
-        voting_clf.fit(X_train, y_train)
+        votingscore = voting_clf.fit(X_train, y_train)
+        print(votingscore.predict(X))
         
         y_pred = voting_clf.predict(X_test)
-        print("VotinClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred))
+        print("VotingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred))
+        print("VotingClassifier DT with GNB confusion matris: ", confusion_matrix(y_test, y_pred))
         
         # Combine using StackingClassifier
         stacking_clf = StackingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], final_estimator=LogisticRegression())
-        stacking_clf.fit(X_train, y_train)
-
+        stacking_clf.fit(X_train, y_train).score(X_test, y_test)
+        
         # Evaluate
         y_pred = stacking_clf.predict(X_test)
         print("StackingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred))
+        print("StackingClassifier DT with GNB Confusion Matrix:", confusion_matrix(y_test, y_pred))
+       
        
     
 def main():
@@ -248,10 +252,10 @@ def main():
     try:
         data_results = feature_selection.open_file()
         data = data_results
-        data_scaled = feature_selection.standardize_data(data)
+        #data_scaled = feature_selection.standardize_data(data)
         #features = feature_selection.extract_features(data_scaled)
         features = feature_selection.extract_features(data)
-        print(features)
+        print(f" RFECV features identified : {features}")
         attack_classification.decicsionTree(data)
         feature_selection.stop_all()
     except KeyboardInterrupt:
@@ -261,5 +265,3 @@ if __name__ == '__main__':
 
 
     main()
-
-    
