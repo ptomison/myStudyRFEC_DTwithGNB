@@ -53,7 +53,7 @@ library(ipaddress)
 library(tidyr)
 
 directory <- readline(prompt = "Enter your directory name: ")
-D:print(directory)
+print(directory)
 test <- readline(prompt = "Enter the data file to convert: ")
 print(test)
 setwd(directory)
@@ -66,6 +66,13 @@ nrow(test)
 
 time = test$Time
 address <- test$Source
+# special cases in IP source address
+# MS-NLB-PhysServer-32_37:88:7a:07
+address <- gsub("\\MS-NLB-PhysServer-32_37:88:7a:07", "32:37:88:7a:07", address) 
+# PCSSystemtec_4c:e1:2a
+address <- gsub("\\PCSSystemtec_4c:e1:2a", "4c:e1:2a", address) 
+# PCSSystemtec_30:32:69
+address <- gsub("\\PCSSystemtec_30:32:69", "30:32:69", address) 
 i <- 0
 for (i in 1:length(address)) {
    # if address contains letters then chang them to the number
@@ -78,14 +85,13 @@ for (i in 1:length(address)) {
    else
       next
 }
-print(address)
 address <- gsub("\\:", ".", address) 
 Source_address <- gsub("\\.", "", address)
-print(Source_address)
 
 destination <- test$Destination
 destination <- gsub("\\Broadcast", "255.255.255.255", destination) 
 destination <- gsub("\\Spanning-tree-\\(for\\-bridges\\)\\_00", "10.10.10.10", destination)
+destination <- gsub("\\MS-NLB-PhysServer-32_37:88:7a:07", "32:37:88:7a:07", destination)
 destination <- replace_na(destination , "999.999.999.999")
 i <- 0
 for (i in 1:length(destination )) {
@@ -112,7 +118,7 @@ protocol_converted <- gsub("\\STP", 6006, protocol_converted )
 protocol_converted <- gsub("\\DHCP", 7007, protocol_converted )
 protocol_converted <- gsub("\\ICMP", 8008, protocol_converted )
 protocol_converted <- gsub("\\N1", 9009, protocol_converted )
-print(protocol_converted)
+protocol_converted <- gsub("\\IGMPv3", 1010, protocol_converted )
 
 # Extract the TCP flags from the info data and the Openflow information
 # Convert the values to numeric data
@@ -145,7 +151,6 @@ info_converted5 <- as.numeric(info_converted5)
 infor6 <- str_extract(test$Info, "\\OFPT_HELLO")
 info_converted6 <- gsub("\\OFPT_HELLO", 6, infor6)
 info_converted6 <- replace_na(info_converted6, "999")
-info_converted6 <- as.numeric(info_converted6)
 info_converted6 <- as.numeric(info_converted6)
 
 infor7 <- str_extract(test$Info, "\\OFPT_PACKET_IN")
@@ -193,7 +198,42 @@ info_converted15 <- gsub("\\[FIN, ACK]", 15, infor15)
 info_converted15 <- replace_na(info_converted15, "999")
 info_converted15 <- as.numeric(info_converted15)
 
-# Now combine the 15 arrays into a single array 
+infor16 <- str_extract(test$Info, "\\[SYN, ACK]")
+info_converted16 <- gsub("\\[SYN, ACK]", 16, infor16)
+info_converted16 <- replace_na(info_converted16, "999")
+info_converted16 <- as.numeric(info_converted16)
+
+infor17 <- str_extract(test$Info, "\\Conf. Root ")
+info_converted17 <- gsub("\\Conf. Root " , 17, infor17)
+info_converted17 <- replace_na(info_converted17, "999")
+info_converted17 <- as.numeric(info_converted17)
+
+infor18 <- str_extract(test$Info, "\\Echo (ping) request ")
+info_converted18 <- gsub("\\Echo (ping) request ", 18, infor18)
+info_converted18 <- replace_na(info_converted18, "999")
+info_converted18 <- as.numeric(info_converted18)
+
+infor19 <- str_extract(test$Info, "\\Echo (ping) reply ")
+info_converted19 <- gsub("\\Echo (ping) reply ", 19, infor19)
+info_converted19 <- replace_na(info_converted19, "999")
+info_converted19 <- as.numeric(info_converted19)
+
+infor20 <- str_extract(test$Info, "\\Who has ")
+info_converted20 <- gsub("\\Who has ", 20, infor20)
+info_converted20 <- replace_na(info_converted20, "999")
+info_converted20 <- as.numeric(info_converted20)
+
+infor21 <- str_extract(test$Info, "\\Conf. TC + Root ") 
+info_converted21 <- gsub("\\Conf. TC + Root ", 21, infor21)
+info_converted21 <- replace_na(info_converted21, "999")
+info_converted21 <- as.numeric(info_converted21)
+
+infor22 <- str_extract(test$Info, "\\Standard query ") 
+info_converted22 <- gsub("\\Standard query ", 22, infor22)
+info_converted22 <- replace_na(info_converted22, "999")
+info_converted22 <- as.numeric(info_converted22)
+
+# Now combine the 22 information arrays into a single array 
 info_converted <- c()
 i <- 0
 for (i in 1:length(test$Info)) {
@@ -242,9 +282,31 @@ for (i in 1:length(test$Info)) {
    else if (info_converted15[i] == 15) {
    	info_converted <- c(info_converted, info_converted15[i])
    }
+   else if (info_converted16[i] == 16) {
+   	info_converted <- c(info_converted, info_converted16[i])
+   }
+   else if (info_converted17[i] == 17) {
+   	info_converted <- c(info_converted, info_converted17[i])
+   }
+   else if (info_converted18[i] == 18) {
+   	info_converted <- c(info_converted, info_converted18[i])
+   }
+   else if (info_converted19[i] == 19) {
+   	info_converted <- c(info_converted, info_converted19[i])
+   }
+   else if (info_converted20[i] == 20) {
+   	info_converted <- c(info_converted, info_converted20[i])
+   }
+   else if (info_converted21[i] == 21) {
+   	info_converted <- c(info_converted, info_converted21[i])
+   }
+   else if (info_converted22[i] == 22) {
+   	info_converted <- c(info_converted, info_converted22[i])
+   }
    else
-     info_converted <- c(info_converted, 0)
+     info_converted <- c(info_converted, 999)
 }
+
 Length <- test$Length
 number <- test$No.
 
