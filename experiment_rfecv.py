@@ -7,12 +7,14 @@ Created on Thu May  8 20:50:53 2025
 
 #import numpy as np
 import pandas as pd
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import os
 #import csv
 #import sys
 #import re
 import numpy as np
+import seaborn as sns
+#import shap
 
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split, cross_val_score
 from skmultilearn.model_selection import iterative_train_test_split
@@ -20,11 +22,13 @@ from sklearn.feature_selection import RFECV
 from sklearn.ensemble import RandomForestClassifier, StackingClassifier, VotingClassifier
 #from sklearn import linear_model
 from sklearn.linear_model import LogisticRegression #, LinearRegression, 
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.datasets import make_classification
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score
 from sklearn.naive_bayes import GaussianNB
+from yellowbrick.features import FeatureImportances
+from sklearn import tree
 
 
 
@@ -39,7 +43,8 @@ class RFECV_EXPERIMENT:
     def open_file(self):
         base_dir = os.path.dirname(__file__)  # Directory of the current script
     
-        data_path = os.path.join(base_dir, "/PhD/DIS9903A/Week 7/")
+        #data_path = os.path.join(base_dir, "/PhD/DIS9903A/Week 7/")
+        data_path = os.path.join(base_dir, "/DataCollection/Source")
         print(data_path)
         os.chdir(data_path) 
     
@@ -75,25 +80,27 @@ class RFECV_EXPERIMENT:
         data_new_scaled = stats.zscore(data)
         return data_new_scaled
                     
-    def extract_features(self, data):
+    def extract_features(self, data, file):
         print("Extracting the features using RFECV")
-        # first drop the first two columns of the dataset since it just contains the number of elements
-        #y_col = "Unnamed: 0"
+        # Remove the columns with the number listing from the data preprocessing step
+        y_col = "Unnamed: 0"
         
-        # = data[y_col]
+        y = data[y_col]
         
-        #data = data.drop([y_col], axis = 1)
+        data = data.drop([y_col], axis = 1)
         
-        #y1_col = "number"
-        y1_col = "No"
+        #y1_col = "No"
+        y1_col = "number"
         
         y = data[y1_col]
         
-        y = y.to_frame()
         
-        #y_col = "info_converted"
-        y_col = "Source_address"
+        X = data.drop([y1_col], axis = 1)
+        
+        y_col = "info_converted"
+        #y_col = "Source_address"
         #y_col = "No"  # Use this only when using the IMB SPPS data instead of the R data preprocessed data
+        
         y = data[y_col]
         #print(y)
         
@@ -101,9 +108,6 @@ class RFECV_EXPERIMENT:
         
         model = RandomForestClassifier(random_state=42)
        
-        # Split the data for the RF model 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3)
-        
         print("Making Data Classification Complete")
    
         # Setup the cross_validation
@@ -112,6 +116,12 @@ class RFECV_EXPERIMENT:
         
         #Initializing RFE model
         rfecv = RFECV(estimator=model, step=1, min_features_to_select=1, scoring='accuracy', cv=cv, n_jobs=-1)
+        
+        y = y.to_frame()
+        y = np.ravel(y)
+        #y = pd.DataFrame(y)
+        
+        #print(y)
         
         #features = rfecv.fit(X_train, y_train)
         features = rfecv.fit_transform(X, y)
@@ -122,20 +132,42 @@ class RFECV_EXPERIMENT:
         # Step 5: Evaluate the RFECV model using StrartifiedKFold cross_val_score
         scores = cross_val_score(rfecv.estimator_, X, y, cv=cv, scoring='accuracy')
         # Step 6: Print results
-        print(f"Optimal number of features: {rfecv.n_features_}")
-        print(f"Selected features: {rfecv.support_}")
-        print(f"Cross-validation scores: {scores}")
-        print(f"Mean accuracy: {scores.mean():.4f}")
-        print(f"RFECV ranking: {rfecv.ranking_}")
+        print(f"Optimal number of features: {rfecv.n_features_}", file=file)
+        print(f"Selected features: {rfecv.support_}", file=file)
+        print(f"Cross-validation scores: {scores}", file=file)
+        print(f"Cross validation Mean accuracy: {scores.mean():.4f}", file=file)
+        print(f"RFECV ranking: {rfecv.ranking_}", file=file)
+        
+        # Plot the RFECV feature data for visualization
+        # Using Scatter plot
+        plt.figure(figsize=(10, 6))
+        plt.xlabel("Number of Features Selected")
+        plt.ylabel("Cross-Validation Score (Accuracy)")
+        plt.title("RFECV - Optimal Number of Features")
+        plt.plot(range(1, len(rfecv.cv_results_['mean_test_score']) + 1), rfecv.cv_results_['mean_test_score'], marker='o')
+        plt.grid()
+        plt.show()
+        
+        id_features = pd.DataFrame(rfecv.ranking_)
+        
+        sns.set(style="ticks", color_codes=True)
+        sns.pairplot(id_features, diag_kind="kde")
+        plt.show()
+        
         
         # Step 5a: Evaluate the RFECV model using KFold cross_val_score
         scores = cross_val_score(rfecv.estimator_, X, y, cv=kf, scoring='accuracy')
         # Step 6: Print results
-        print(f"KF Optimal number of features: {rfecv.n_features_}")
-        print(f"KF Selected features: {rfecv.support_}")
-        print(f"KF Cross-validation scores: {scores}")
-        print(f"KF Mean accuracy: {scores.mean():.4f}")
-        print(f"KF RFECV ranking: {rfecv.ranking_}")
+        print(f"KF Optimal number of features: {rfecv.n_features_}", file=file)
+        print(f"KF Selected features: {rfecv.support_}", file=file)
+        print(f"KF Cross-validation scores: {scores}", file=file)
+        print(f"KF Mean accuracy: {scores.mean():.4f}", file=file)
+        print(f"KF RFECV ranking: {rfecv.ranking_}", file=file)
+        
+        print("Evaluating the RF Model")
+        
+        # Split the data for the RF model 
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
         
         model.fit(X_train, y_train)
         
@@ -145,9 +177,27 @@ class RFECV_EXPERIMENT:
         precision = precision_score(y_test, y_pred, average='macro')
         recall = recall_score(y_test, y_pred, average='macro')
        
-        print("RF Classifier Accuracy:", accuracy)
-        print("RF Classifier Precision:", precision)
-        print("RF Classifier Recall:", recall)
+        print("RF Classifier Accuracy:", accuracy, file=file)
+        print("RF Classifier Precision:", precision, file=file)
+        print("RF Classifier Recall:", recall, file=file)
+        
+        viz = FeatureImportances(model)
+        viz.fit(X, y)
+        viz.show()
+        
+        importances = model.feature_importances_
+        indices = np.argsort(importances)[::-1]
+        plt.figure(figsize=(10,6))
+        bars = plt.bar(range(X.shape[1]), importances[indices], edgecolor="#008031", linewidth=1)
+
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width() / 2, height, f"{height:.2f}", ha="center", va="bottom", size=8)
+
+        plt.title("Feature Importances", size=20, loc="left", y=1.04, weight="bold")
+        plt.ylabel("Importance")
+        plt.xticks(range(X.shape[1]), np.array(X.columns)[indices], rotation=90, size=12)
+        plt.show()
         
         return features
 
@@ -161,76 +211,83 @@ class DT_with_GNB:
         self.x = [0][0]
         self.y = [0]
         
-    def decicsionTree(self, data):
+    def decicsionTree(self, data, file):
         
         # Remove the columns with the number listing from the data preprocessing step
-        #y_col = "Unnamed: 0"
+        y_col = "Unnamed: 0"
         
-        #y = data[y_col]
+        y = data[y_col]
         
-        #data = data.drop([y_col], axis = 1)
+        data = data.drop([y_col], axis = 1)
         
-        y1_col = "No"
+        #y1_col = "No"
+        y1_col = "number"
         
         y = data[y1_col]
         
-        y = y.to_frame()
-        
         X = data.drop([y1_col], axis = 1)
         
-        y_col = 'Source_address'
+        #y_col = 'Source_address'
         #y_col = 'protocol_convert'
-        #y_col = "info_converted"
+        y_col = "info_converted"
         y = data[y_col]
         
-        #y = np.ravel(y)
+        X = data.drop([y_col], axis = 1)
+        
+        y = y.to_frame()
+        
+        y = np.ravel(y)
         #print(y)
         
         #print(type(X))
         #print(type(y))
        
         # Random forest classifier, to classify dogs into big or small
-        model = RandomForestClassifier()
+        #model = RandomForestClassifier()
         
         # Find the number of members in the least-populated class, THIS IS THE LINE WHERE THE MAGIC HAPPENS :)
-        leastPopulated = [x for d in set(list(y)) for x in list(y) if x == d].count(min([x for d in set(list(y)) for x in list(y) if x == d], key=[x for d in set(list(y)) for x in list(y) if x == d].count))
-        fOne = cross_val_score(model, X, y, cv=leastPopulated, scoring='f1_weighted')
+        #leastPopulated = [x for d in set(list(y)) for x in list(y) if x == d].count(min([x for d in set(list(y)) for x in list(y) if x == d], key=[x for d in set(list(y)) for x in list(y) if x == d].count))
+        #fOne = cross_val_score(model, X, y, cv=leastPopulated, scoring='f1_weighted')
 
         # We print the F1 score here
-        print(f"Average F1 score during cross-validation: {np.mean(fOne)}")
+        #print(f"Average F1 score during cross-validation: {np.mean(fOne)}", file=file)
 
         # Split dataset into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42, stratify=y)
-        #X_train, y_train, X_test, y_test = iterative_train_test_split(X, y1, test_size = 0.2)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42)
         
         # Decision Tree Classifier
         dt_model = DecisionTreeClassifier(random_state=42)
         dt_model.fit(X_train, y_train)
         dt_predictions = dt_model.predict(X_test)
 
+        # Plot the decision tree
+        plt.figure(figsize=(12, 8))
+        plot_tree(dt_model, filled=True)
+        plt.show()    
+        
         # Gaussian Naive Bayes Classifier
         gnb_model = GaussianNB()
         gnb_model.fit(X_train, y_train)
         gnb_predictions = gnb_model.predict(X_test)
         
         # Evaluate Decision Tree
-        print("Decision Tree Classifier:")
-        print(f"DT Accuracy: {accuracy_score(y_test, dt_predictions):.4f}")
-        print(classification_report(y_test, dt_predictions, zero_division=1.0))
+        print("Decision Tree Classifier:", file=file)
+        print(f"DT Accuracy: {accuracy_score(y_test, dt_predictions):.4f}", file=file)
+        print(classification_report(y_test, dt_predictions, zero_division=1.0), file=file)
 
         # Evaluate Gaussian Naive Bayes
-        print("Gaussian Naive Bayes Classifier:")
-        print(f"GNB Accuracy: {accuracy_score(y_test, gnb_predictions):.4f}")
-        print(classification_report(y_test, gnb_predictions, zero_division=1.0))
+        print("Gaussian Naive Bayes Classifier:", file=file)
+        print(f"GNB Accuracy: {accuracy_score(y_test, gnb_predictions):.4f}", file=file)
+        print(classification_report(y_test, gnb_predictions, zero_division=1.0), file=file)
         
         # Combine using VotingClassifier
         voting_clf = VotingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], voting='hard')
         votingscore = voting_clf.fit(X_train, y_train)
-        print(votingscore.predict(X))
+        print(votingscore.predict(X), file=file)
         
         y_pred = voting_clf.predict(X_test)
-        print("VotingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred))
-        print("VotingClassifier DT with GNB confusion matris: ", confusion_matrix(y_test, y_pred))
+        print("VotingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
+        print("VotingClassifier DT with GNB confusion matris: ", confusion_matrix(y_test, y_pred), file=file)
         
         # Combine using StackingClassifier
         stacking_clf = StackingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], final_estimator=LogisticRegression())
@@ -238,8 +295,8 @@ class DT_with_GNB:
         
         # Evaluate
         y_pred = stacking_clf.predict(X_test)
-        print("StackingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred))
-        print("StackingClassifier DT with GNB Confusion Matrix:", confusion_matrix(y_test, y_pred))
+        print("StackingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
+        print("StackingClassifier DT with GNB Confusion Matrix:", confusion_matrix(y_test, y_pred), file=file)
        
        
     
@@ -252,11 +309,13 @@ def main():
     try:
         data_results = feature_selection.open_file()
         data = data_results
+        file = open("D:/DataCollection/Source/output.txt", "a")
         #data_scaled = feature_selection.standardize_data(data)
         #features = feature_selection.extract_features(data_scaled)
-        features = feature_selection.extract_features(data)
-        print(f" RFECV features identified : {features}")
-        attack_classification.decicsionTree(data)
+        features = feature_selection.extract_features(data, file)
+        print(f" RFECV features identified : {features}", file=file)
+        attack_classification.decicsionTree(data, file)
+        file.close()
         feature_selection.stop_all()
     except KeyboardInterrupt:
         feature_selection.stop_all()
