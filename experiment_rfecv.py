@@ -17,18 +17,16 @@ import seaborn as sns
 #import shap
 
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split, cross_val_score
-from skmultilearn.model_selection import iterative_train_test_split
+#from skmultilearn.model_selection import iterative_train_test_split
 from sklearn.feature_selection import RFECV
 from sklearn.ensemble import RandomForestClassifier, StackingClassifier, VotingClassifier
 #from sklearn import linear_model
 from sklearn.linear_model import LogisticRegression #, LinearRegression, 
 from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.datasets import make_classification
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay
 from sklearn.naive_bayes import GaussianNB
 from yellowbrick.features import FeatureImportances
-from sklearn import tree
 
 
 
@@ -148,6 +146,23 @@ class RFECV_EXPERIMENT:
         plt.grid()
         plt.show()
         
+        # Plot feature rankings
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(X.shape[1]), rfecv.ranking_, color='skyblue')
+        plt.xlabel("Feature Index")
+        plt.ylabel("Feature Ranking")
+        plt.title("Feature Rankings by RFECV")
+        plt.xticks(range(X.shape[1]))
+        plt.show()
+        
+        selected_features = rfecv.support_
+
+        # Heatmap of selected features
+        sns.heatmap([selected_features], cmap="coolwarm", cbar=False, xticklabels=range(X.shape[1]))
+        plt.xlabel("Feature Index")
+        plt.title("Selected Features (1 = Selected, 0 = Not Selected)")
+        plt.show()
+        
         id_features = pd.DataFrame(rfecv.ranking_)
         
         sns.set(style="ticks", color_codes=True)
@@ -265,10 +280,56 @@ class DT_with_GNB:
         plot_tree(dt_model, filled=True)
         plt.show()    
         
+        y_pred = dt_model.predict(X_test)
+
+        # Generate and plot the confusion matrix
+        cm = confusion_matrix(y_test, y_pred, labels=dt_model.classes_)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=dt_model.classes_)
+        disp.plot(cmap=plt.cm.Blues)
+        plt.show()
+        
+        # Get feature importances
+        feature_importances = pd.DataFrame({
+            'Feature': X_train.columns,
+            'Importance': dt_model.feature_importances_
+            }).sort_values(by='Importance', ascending=False)
+
+        # Plot feature importances
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x='Importance', y='Feature', data=feature_importances, palette='viridis')
+        plt.title('DT Classification Model Feature Importance')
+        plt.show()
+        
         # Gaussian Naive Bayes Classifier
         gnb_model = GaussianNB()
         gnb_model.fit(X_train, y_train)
         gnb_predictions = gnb_model.predict(X_test)
+        
+        # Plot confusion matrix
+        y_pred = gnb_model.predict(X_test)
+        ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
+        
+        # Predict probabilities
+        y_proba = gnb_model.predict_proba(X_test)
+
+        # Plot probabilities for each class
+        for i in range(y_proba.shape[1]):
+            plt.hist(y_proba[:, i], bins=10, alpha=0.5, label=f'Class {i}')
+        plt.title('GNB Model Predicted Probabilities')
+        plt.xlabel('Probability')
+        plt.ylabel('Frequency')
+        plt.legend()
+        plt.show()
+        
+        num_columns = X_train.shape[1]
+        print(f"Number of columns in X_train: {num_columns}")
+        num_columns = X_train.shape[0]
+        print(f"Number of rows in X_train: {num_columns}")
+        
+        num_columns = X_test.shape[1]
+        print(f"Number of columns in X_test: {num_columns}")
+        num_columns = X_train.shape[0]
+        print(f"Number of rows in X_train: {num_columns}")
         
         # Evaluate Decision Tree
         print("Decision Tree Classifier:", file=file)
@@ -289,7 +350,7 @@ class DT_with_GNB:
         print("VotingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
         print("VotingClassifier DT with GNB confusion matris: ", confusion_matrix(y_test, y_pred), file=file)
         
-        # Combine using StackingClassifier
+        # Combine DT with GNB using StackingClassifier and default final estimator
         stacking_clf = StackingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], final_estimator=LogisticRegression())
         stacking_clf.fit(X_train, y_train).score(X_test, y_test)
         
@@ -298,6 +359,33 @@ class DT_with_GNB:
         print("StackingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
         print("StackingClassifier DT with GNB Confusion Matrix:", confusion_matrix(y_test, y_pred), file=file)
        
+        # try to output GNB Decision boundary
+        #element_X = X_train.to_numpy()
+        
+        # Define the range of the plot
+        #x_min, x_max = element_X[:, 0].min() - 1, element_X[:, 0].max() + 1
+        #_min, y_max = element_X[:, 1].min() - 1, element_X[:, 1].max() + 1
+
+        # Generate a grid of points for the decision boundary
+        #x = np.linspace(x_min, x_max, 500)
+        #y = np.linspace(y_min, y_max, 500)
+        
+        #xx, yy = np.meshgrid(x, y)
+        #grid_points = np.c_[xx.ravel(), yy.ravel()]
+        
+        
+        # Predict probabilities for the grid points
+        #probs = gnb_model.predict_proba(grid_points)[:, 1]
+        #probs = probs.reshape(xx.shape)
+
+        # Plot the decision boundary
+        #plt.contour(xx, yy, probs, levels=[0.5], colors='red', linewidths=2)
+        #plt.scatter(X[:, 0], X[:, 1], c=y, cmap=plt.cm.Paired, edgecolor='k')
+        #plt.title("Gaussian Naive Bayes Decision Boundary")
+        #plt.xlabel("Feature 1")
+        #plt.ylabel("Feature 2")
+        #plt.show()
+
        
     
 def main():
@@ -324,3 +412,4 @@ if __name__ == '__main__':
 
 
     main()
+
