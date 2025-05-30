@@ -75,12 +75,20 @@ address <- gsub("\\PCSSystemtec_4c:e1:2a", "4c:e1:2a", address)
 address <- gsub("\\PCSSystemtec_b4:51:8f", "b4:51:8f", address) 
 # PCSSystemtec_30:32:69
 address <- gsub("\\PCSSystemtec_30:32:69", "30:32:69", address) 
+#PCSSystemtec_be:d6:b5
+address <- gsub("\\PCSSystemtec_be:d6:b5", "be:d6:b5", address) 
+# PCSSystemtec_76:39:cb
+address <- gsub("\\PCSSystemtec_76:39:cb", "76:39:cb", address) 
+
 #MS-NLB-PhysServer-32_7f:cb:c9:96
 address <- gsub("\\MS-NLB-PhysServer-32_7f:cb:c9:96", "32:7f:cb:c9:96", address) 
 #MS-NLB-PhysServer-16_da:13:20:25
 address <- gsub("\\MS-NLB-PhysServer-16_da:13:20:25", "16:da:13:20:25", address) 
 #MS-NLB-PhysServer-23_b2:04:ec:4b
 address <- gsub("\\MS-NLB-PhysServer-23_b2:04:ec:4b", "23:b2:04:ec:4b", address) 
+#MS-NLB-PhysServer-31_a0:85:9b:01
+address <- gsub("\\MS-NLB-PhysServer-31_a0:85:9b:01", "31:a0:85:9b:01", address) 
+
 i <- 0
 for (i in 1:length(address)) {
    # if address contains letters then chang them to the number
