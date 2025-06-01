@@ -9,6 +9,7 @@ Created on Thu May  8 20:50:53 2025
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import time
 #import csv
 #import sys
 #import re
@@ -42,7 +43,7 @@ class RFECV_EXPERIMENT:
         base_dir = os.path.dirname(__file__)  # Directory of the current script
     
         #data_path = os.path.join(base_dir, "/PhD/DIS9903A/Week 7/")
-        data_path = os.path.join(base_dir, "/DataCollection/Source")
+        data_path = os.path.join(base_dir, "/ConductExperiment/DataCollection/Source")
         print(data_path)
         os.chdir(data_path) 
     
@@ -54,7 +55,7 @@ class RFECV_EXPERIMENT:
         # using panda makes it easier to manipulate the data
         data = pd.read_csv(network_flow_path, sep=',')
         self.data = data
-        return data
+        return data, file
     
     def standardize_data(self, data):
         
@@ -87,22 +88,23 @@ class RFECV_EXPERIMENT:
         
         data = data.drop([y_col], axis = 1)
         
-        #y1_col = "No"
         y1_col = "number"
         
-        y = data[y1_col]
-        
-        
-        X = data.drop([y1_col], axis = 1)
+        data = data.drop([y1_col], axis = 1)
         
         y_col = "info_converted"
         #y_col = "Source_address"
-        #y_col = "No"  # Use this only when using the IMB SPPS data instead of the R data preprocessed data
+        #y1_col = "protocol_converted" 
         
+        #y = data[[y_col, y1_col]]
         y = data[y_col]
         #print(y)
         
         X = data.drop([y_col], axis = 1)
+        
+        # Retrieve the names of the columns to identify he RFECV features selected
+        #feature_names = [f"Feature_{i}" for i in range(X.shape[1])]
+        feature_names = X.columns
         
         model = RandomForestClassifier(random_state=42)
        
@@ -112,29 +114,64 @@ class RFECV_EXPERIMENT:
         cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)  # Cross-validation
         kf = KFold(n_splits=5, shuffle=True, random_state=42)  # Cross-validation
         
-        #Initializing RFE model
+        #Initializing RFE model use the fist one with info_converted and the second one with Source_address
         rfecv = RFECV(estimator=model, step=1, min_features_to_select=1, scoring='accuracy', cv=cv, n_jobs=-1)
+        #rfecv = RFECV(estimator=model, step=1, min_features_to_select=1, scoring='accuracy', cv=kf, n_jobs=-1)
         
-        y = y.to_frame()
-        y = np.ravel(y)
+        #y = y.to_frame()
+        #y = np.ravel(y)
         #y = pd.DataFrame(y)
+        
+        # Split the data for the RFECV model 
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y)
         
         #print(y)
         
-        #features = rfecv.fit(X_train, y_train)
-        features = rfecv.fit_transform(X, y)
+        start_time = time.time()
+        features = rfecv.fit(X_train, y_train)
+        features_selected = rfecv.fit_transform(X_train, y_train)
+        end_time = time.time()
+        
+        print(f"RFECV Execution time: {end_time - start_time:.6f} seconds", file=file)
         #print(features)
         
         print("RFECV model fitting complete")
         
+        # Get the names of the selected features
+        selected_features = [name for name, selected in zip(feature_names, rfecv.support_) if selected]
+
+        print(f"Selected Features: {selected_features}", file=file)
+        
         # Step 5: Evaluate the RFECV model using StrartifiedKFold cross_val_score
-        scores = cross_val_score(rfecv.estimator_, X, y, cv=cv, scoring='accuracy')
+        scores = cross_val_score(rfecv.estimator_, X_train, y_train, cv=cv, scoring='accuracy')
+        
         # Step 6: Print results
-        print(f"Optimal number of features: {rfecv.n_features_}", file=file)
-        print(f"Selected features: {rfecv.support_}", file=file)
-        print(f"Cross-validation scores: {scores}", file=file)
-        print(f"Cross validation Mean accuracy: {scores.mean():.4f}", file=file)
+        print(f"RFECV Optimal number of features: {rfecv.n_features_}", file=file)
+        print(f"RFECV Selected features: {rfecv.support_}", file=file)
+        print(f"RFECV Cross-validation scores: {scores}", file=file)
+        print(f"RFECV Cross validation Mean accuracy: {scores.mean():.4f}", file=file)
         print(f"RFECV ranking: {rfecv.ranking_}", file=file)
+        
+        # Retrieve the number of selected features
+        num_selected_features = rfecv.n_features_
+        
+        # Calculate the number of omitted features
+        num_omitted_features = X.shape[1] - features_selected
+        
+        print(f"Number of selected features: {num_selected_features}", file=file)
+        print(f"Number of omitted features: {num_omitted_features}", file=file)
+        
+        # Step 6a: Make predictions on the test set
+        y_pred = rfecv.estimator_.predict(features_selected)
+        
+        # Not helping need to use the other heatmaps
+        #ranking = confusion_matrix(y_train, y_pred).ravel()
+        #ranking_2d = ranking.reshape(-1,1)
+        #Create normalized Confusion Matrix
+        #cm_normalized = ranking_2d.astype('float') / ranking_2d.sum(axis=0)[:, np.newaxis]
+        #sns.heatmap(cm_normalized, annot=True, linewidths = 0.01)
+        
+        print(f"RFECV Prediction: {y_pred}", file=file)
         
         # Plot the RFECV feature data for visualization
         # Using Scatter plot
@@ -163,12 +200,18 @@ class RFECV_EXPERIMENT:
         plt.title("Selected Features (1 = Selected, 0 = Not Selected)")
         plt.show()
         
+        # Count duplicate features
+        original_features = pd.DataFrame(X).columns
+        selected_feature_names = original_features[selected_features]
+        duplicates = len(selected_feature_names) - len(set(selected_feature_names))
+
+        print(f"RFECV Number of duplicate features: {duplicates}", file=file)
+
         id_features = pd.DataFrame(rfecv.ranking_)
         
         sns.set(style="ticks", color_codes=True)
         sns.pairplot(id_features, diag_kind="kde")
         plt.show()
-        
         
         # Step 5a: Evaluate the RFECV model using KFold cross_val_score
         scores = cross_val_score(rfecv.estimator_, X, y, cv=kf, scoring='accuracy')
@@ -182,9 +225,13 @@ class RFECV_EXPERIMENT:
         print("Evaluating the RF Model")
         
         # Split the data for the RF model 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y)
         
+        start_time = time.time()
         model.fit(X_train, y_train)
+        end_time = time.time()
+        
+        print(f"RF Model Execution time: {end_time - start_time:.6f} seconds", file=file)
         
         y_pred = model.predict(X_test)
         
@@ -238,12 +285,10 @@ class DT_with_GNB:
         #y1_col = "No"
         y1_col = "number"
         
-        y = data[y1_col]
-        
-        X = data.drop([y1_col], axis = 1)
+        data = data.drop([y1_col], axis = 1)
         
         #y_col = 'Source_address'
-        #y_col = 'protocol_convert'
+        #y_col = 'protocol_converted'
         y_col = "info_converted"
         y = data[y_col]
         
@@ -257,7 +302,7 @@ class DT_with_GNB:
         #print(type(X))
         #print(type(y))
        
-        # Random forest classifier, to classify dogs into big or small
+        # Random forest classifier, to classify features into big or small
         #model = RandomForestClassifier()
         
         # Find the number of members in the least-populated class, THIS IS THE LINE WHERE THE MAGIC HAPPENS :)
@@ -268,20 +313,43 @@ class DT_with_GNB:
         #print(f"Average F1 score during cross-validation: {np.mean(fOne)}", file=file)
 
         # Split dataset into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
         # Decision Tree Classifier
+        start_time = time.time()
         dt_model = DecisionTreeClassifier(random_state=42)
         dt_model.fit(X_train, y_train)
+        end_time = time.time()
+        
+        print(f"DT Classifier Model Execution time: {end_time - start_time:.6f} seconds", file=file)
+        
         dt_predictions = dt_model.predict(X_test)
 
+       # fOne = cross_val_score(dt_model, X_train, y_train, cv=5, scoring='f1_weighted')
+        fOne = cross_val_score(dt_model, X_train, y_train, cv=5)
+
+        # We print the F1 score here
+        print("Average Decision Tree F1 score during cross-validation: ", np.mean(fOne))
+        #print("Decision Tree f1 scores: ", fOne.mean())
+
+        # Then print the F1 score to the output file
+        print(f"Average Decision Tree F1 score during cross-validation: {np.mean(fOne)}", file=file)
+    
+        # Retrieve the number of unrelated class categories
+        num_classes = len(dt_model.classes_)
+        print(f"DT Number of unrelated class categories: {num_classes}", file=file)
+       
+        # Retrieve the number of class categories
+        num_classes = dt_model.n_classes_
+        print(f"DT Number of class categories: {num_classes}", file=file)
+
         # Plot the decision tree
-        plt.figure(figsize=(12, 8))
-        plot_tree(dt_model, filled=True)
-        plt.show()    
+        #plt.figure(figsize=(12, 8))
+        #plot_tree(dt_model, filled=True)
+        #plt.show()    
         
         y_pred = dt_model.predict(X_test)
-
+        
         # Generate and plot the confusion matrix
         cm = confusion_matrix(y_test, y_pred, labels=dt_model.classes_)
         disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=dt_model.classes_)
@@ -301,13 +369,19 @@ class DT_with_GNB:
         plt.show()
         
         # Gaussian Naive Bayes Classifier
+        start_time = time.time()
         gnb_model = GaussianNB()
         gnb_model.fit(X_train, y_train)
+        end_time = time.time()
+        
+        print(f"GNB Model Execution time: {end_time - start_time:.6f} seconds", file=file)
+        
         gnb_predictions = gnb_model.predict(X_test)
         
         # Plot confusion matrix
         y_pred = gnb_model.predict(X_test)
         ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
+        
         
         # Predict probabilities
         y_proba = gnb_model.predict_proba(X_test)
@@ -321,6 +395,10 @@ class DT_with_GNB:
         plt.legend()
         plt.show()
         
+        # Retrieve the number of unrelated class categories
+        num_classes = len(gnb_model.classes_)
+        print(f"GNB Number of class categories: {num_classes}", file=file)
+       
         num_columns = X_train.shape[1]
         print(f"Number of columns in X_train: {num_columns}")
         num_columns = X_train.shape[0]
@@ -342,8 +420,13 @@ class DT_with_GNB:
         print(classification_report(y_test, gnb_predictions, zero_division=1.0), file=file)
         
         # Combine using VotingClassifier
+        start_time = time.time()
         voting_clf = VotingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], voting='hard')
         votingscore = voting_clf.fit(X_train, y_train)
+        end_time = time.time()
+        
+        print(f"DT and GNB Voting Classifier Execution time: {end_time - start_time:.6f} seconds", file=file)
+        
         print(votingscore.predict(X), file=file)
         
         y_pred = voting_clf.predict(X_test)
@@ -351,43 +434,25 @@ class DT_with_GNB:
         print("VotingClassifier DT with GNB confusion matris: ", confusion_matrix(y_test, y_pred), file=file)
         
         # Combine DT with GNB using StackingClassifier and default final estimator
+        start_time = time.time()
         stacking_clf = StackingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], final_estimator=LogisticRegression())
         stacking_clf.fit(X_train, y_train).score(X_test, y_test)
+        end_time = time.time()
+        print(f"DT with GNB Stacking Classifier Execution time: {end_time - start_time:.6f} seconds", file=file)
         
         # Evaluate
         y_pred = stacking_clf.predict(X_test)
         print("StackingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
         print("StackingClassifier DT with GNB Confusion Matrix:", confusion_matrix(y_test, y_pred), file=file)
        
-        # try to output GNB Decision boundary
-        #element_X = X_train.to_numpy()
+        # Retrieve the number of unrelated class categories
+        num_classes = len(stacking_clf.classes_)
+        print(f"StackingClassifier DT with GNB  Number of unrelated class categories: {num_classes}", file=file)
         
-        # Define the range of the plot
-        #x_min, x_max = element_X[:, 0].min() - 1, element_X[:, 0].max() + 1
-        #_min, y_max = element_X[:, 1].min() - 1, element_X[:, 1].max() + 1
-
-        # Generate a grid of points for the decision boundary
-        #x = np.linspace(x_min, x_max, 500)
-        #y = np.linspace(y_min, y_max, 500)
-        
-        #xx, yy = np.meshgrid(x, y)
-        #grid_points = np.c_[xx.ravel(), yy.ravel()]
-        
-        
-        # Predict probabilities for the grid points
-        #probs = gnb_model.predict_proba(grid_points)[:, 1]
-        #probs = probs.reshape(xx.shape)
-
-        # Plot the decision boundary
-        #plt.contour(xx, yy, probs, levels=[0.5], colors='red', linewidths=2)
-        #plt.scatter(X[:, 0], X[:, 1], c=y, cmap=plt.cm.Paired, edgecolor='k')
-        #plt.title("Gaussian Naive Bayes Decision Boundary")
-        #plt.xlabel("Feature 1")
-        #plt.ylabel("Feature 2")
-        #plt.show()
-
-       
-    
+        # Retrieve the number of class categories
+        num_classes = stacking_clf.n_classes_
+        print(f"StackingClassifier DT with GNB Number of class categories: {num_classes}")
+            
 def main():
     print("Run the script")
     features = [0];
@@ -395,9 +460,10 @@ def main():
     attack_classification = DT_with_GNB()
     
     try:
-        data_results = feature_selection.open_file()
+        data_results, analysis_file = feature_selection.open_file()
         data = data_results
-        file = open("D:/DataCollection/Source/output.txt", "a")
+        file = open("D:/ConductExperiment/DataCollection/Source/output.txt", "a")
+        print(f"Data under analysis: {analysis_file}", file=file)
         #data_scaled = feature_selection.standardize_data(data)
         #features = feature_selection.extract_features(data_scaled)
         features = feature_selection.extract_features(data, file)
@@ -412,4 +478,3 @@ if __name__ == '__main__':
 
 
     main()
-
