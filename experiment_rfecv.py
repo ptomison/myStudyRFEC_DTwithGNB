@@ -43,7 +43,7 @@ class RFECV_EXPERIMENT:
         base_dir = os.path.dirname(__file__)  # Directory of the current script
     
         #data_path = os.path.join(base_dir, "/PhD/DIS9903A/Week 7/")
-        data_path = os.path.join(base_dir, "/ConductExperiment/DataCollection/Source")
+        data_path = os.path.join(base_dir, "/Phd/DIS9903A/ConductExperiment/DataCollection/Source")
         print(data_path)
         os.chdir(data_path) 
     
@@ -336,12 +336,12 @@ class DT_with_GNB:
         print(f"Average Decision Tree F1 score during cross-validation: {np.mean(fOne)}", file=file)
     
         # Retrieve the number of unrelated class categories
-        num_classes = len(dt_model.classes_)
-        print(f"DT Number of unrelated class categories: {num_classes}", file=file)
+        dt_omt_num_classes = len(dt_model.classes_)
+        print(f"DT Number of unrelated class categories: {dt_omt_num_classes}", file=file)
        
         # Retrieve the number of class categories
-        num_classes = dt_model.n_classes_
-        print(f"DT Number of class categories: {num_classes}", file=file)
+        dt_num_classes = dt_model.n_classes_
+        print(f"DT Number of class categories: {dt_num_classes}", file=file)
 
         # Plot the decision tree
         #plt.figure(figsize=(12, 8))
@@ -396,8 +396,8 @@ class DT_with_GNB:
         plt.show()
         
         # Retrieve the number of unrelated class categories
-        num_classes = len(gnb_model.classes_)
-        print(f"GNB Number of class categories: {num_classes}", file=file)
+        gnb_num_classes = len(gnb_model.classes_)
+        print(f"GNB Number of class categories: {gnb_num_classes}", file=file)
        
         num_columns = X_train.shape[1]
         print(f"Number of columns in X_train: {num_columns}")
@@ -412,12 +412,14 @@ class DT_with_GNB:
         # Evaluate Decision Tree
         print("Decision Tree Classifier:", file=file)
         print(f"DT Accuracy: {accuracy_score(y_test, dt_predictions):.4f}", file=file)
-        print(classification_report(y_test, dt_predictions, zero_division=1.0), file=file)
+        dt_performance = classification_report(y_test, dt_predictions, zero_division=1.0)
+        print(f"DT Classification performance: {dt_performance}", file=file)
 
         # Evaluate Gaussian Naive Bayes
         print("Gaussian Naive Bayes Classifier:", file=file)
         print(f"GNB Accuracy: {accuracy_score(y_test, gnb_predictions):.4f}", file=file)
-        print(classification_report(y_test, gnb_predictions, zero_division=1.0), file=file)
+        gnb_performance = classification_report(y_test, gnb_predictions, zero_division=1.0)
+        print(f"GNB Classification performance: {gnb_performance}", file=file)
         
         # Combine using VotingClassifier
         start_time = time.time()
@@ -446,13 +448,42 @@ class DT_with_GNB:
         print("StackingClassifier DT with GNB Confusion Matrix:", confusion_matrix(y_test, y_pred), file=file)
        
         # Retrieve the number of unrelated class categories
-        num_classes = len(stacking_clf.classes_)
-        print(f"StackingClassifier DT with GNB  Number of unrelated class categories: {num_classes}", file=file)
+        clf_num_omt_classes = len(stacking_clf.classes_)
+        print(f"StackingClassifier DT with GNB  Number of unrelated class categories: {clf_num_omt_classes}", file=file)
         
         # Retrieve the number of class categories
-        num_classes = stacking_clf.n_classes_
-        print(f"StackingClassifier DT with GNB Number of class categories: {num_classes}")
-            
+        clf_num_classes = stacking_clf.classes_
+        print(f"StackingClassifier DT with GNB Number of class categories: {clf_num_classes}", file=file)
+        
+        # try to output GNB Decision boundary
+        #element_X = X_train.to_numpy()
+        
+        # Define the range of the plot
+        #x_min, x_max = element_X[:, 0].min() - 1, element_X[:, 0].max() + 1
+        #_min, y_max = element_X[:, 1].min() - 1, element_X[:, 1].max() + 1
+
+        # Generate a grid of points for the decision boundary
+        #x = np.linspace(x_min, x_max, 500)
+        #y = np.linspace(y_min, y_max, 500)
+        
+        #xx, yy = np.meshgrid(x, y)
+        #grid_points = np.c_[xx.ravel(), yy.ravel()]
+        
+        
+        # Predict probabilities for the grid points
+        #probs = gnb_model.predict_proba(grid_points)[:, 1]
+        #probs = probs.reshape(xx.shape)
+
+        # Plot the decision boundary
+        #plt.contour(xx, yy, probs, levels=[0.5], colors='red', linewidths=2)
+        #plt.scatter(X[:, 0], X[:, 1], c=y, cmap=plt.cm.Paired, edgecolor='k')
+        #plt.title("Gaussian Naive Bayes Decision Boundary")
+        #plt.xlabel("Feature 1")
+        #plt.ylabel("Feature 2")
+        #plt.show()
+
+       
+    
 def main():
     print("Run the script")
     features = [0];
@@ -462,7 +493,7 @@ def main():
     try:
         data_results, analysis_file = feature_selection.open_file()
         data = data_results
-        file = open("D:/ConductExperiment/DataCollection/Source/output.txt", "a")
+        file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/output.txt", "a")
         print(f"Data under analysis: {analysis_file}", file=file)
         #data_scaled = feature_selection.standardize_data(data)
         #features = feature_selection.extract_features(data_scaled)
