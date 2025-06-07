@@ -40,7 +40,7 @@ class RFECV_EXPERIMENT:
         base_dir = os.path.dirname(__file__)  # Directory of the current script
     
         #data_path = os.path.join(base_dir, "/PhD/DIS9903A/Week 7/")
-        data_path = os.path.join(base_dir, "/PhD/DIS9903A/DataCollection/Source")
+        data_path = os.path.join(base_dir, "/PhD/DIS9903A/ConductExperiment/DataCollection/Source")
         print(data_path)
         os.chdir(data_path) 
     
@@ -86,6 +86,7 @@ class RFECV_EXPERIMENT:
         #print(y)
         
         X = data.drop([y_col], axis = 1)
+        feature_names = X.columns
         
         dt_model = DecisionTreeClassifier(random_state=42)
        
@@ -101,46 +102,67 @@ class RFECV_EXPERIMENT:
         y = y.to_frame()
         y = np.ravel(y)
         #y = pd.DataFrame(y)
+        #y.columns = ['info_converted']
         
         #print(y)
        
         # Split the data for the DT and GNB models 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y)
+        #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y)
        
         start_time = time.time()
         # train the model and identify the features
-        features = rfecv.fit(X_train, y_train)
-        features_selected = rfecv.fit_transform(X_train, y_train)
+        #features = rfecv.fit(X, y)
+        features = rfecv.fit_transform(X, y)
         #print(features)
         end_time = time.time()
         
         training_time = end_time - start_time
         print(f"RFECV model fitting complete in: {training_time}", file=file)
         
+        # Step 6a: Make predictions on the test set
+        y_pred = rfecv.estimator_.predict(features)
+        
+        print(f"RFECV Prediction: {y_pred}", file=file)
+        
+        # Get the names of the selected features
+        selected_features = [name for name, selected in zip(feature_names, rfecv.support_) if selected]
+
+        print(f"Selected Features: {selected_features}", file=file)
+        
         # Retrieve the number of selected features
         num_selected_features = rfecv.n_features_
         
         # Calculate the number of omitted features
-        num_omitted_features = X.shape[1] - features_selected
+       # num_omitted_features = X.shape[1] - features_selected
+        num_omitted_features = (~rfecv.support_).sum()
         
         print(f"Number of selected features: {num_selected_features}", file=file)
         print(f"Number of omitted features: {num_omitted_features}", file=file)
         
+        s_features = rfecv.support_
+
+        # Count duplicate features
+        original_features = pd.DataFrame(X).columns
+        selected_feature_names = original_features[s_features]
+        duplicates = len(selected_feature_names) - len(set(selected_feature_names))
+
+        print(f"RFECV Number of duplicate features: {duplicates}", file=file)
+
         
         # Step 5: Evaluate the RFECV model using StrartifiedKFold cross_val_score
         scores = cross_val_score(rfecv.estimator_, X, y, cv=cv, scoring='accuracy')
         # Step 6: Print results
-        print(f"Optimal number of features: {rfecv.n_features_}", file=file)
-        print(f"Selected features: {rfecv.support_}", file=file)
-        print(f"Cross-validation scores: {scores}", file=file)
-        print(f"Cross validation Mean accuracy: {scores.mean():.4f}", file=file)
+        print(f"RFECV Optimal number of features: {rfecv.n_features_}", file=file)
+        print(f"RFECV Selected features: {rfecv.support_}", file=file)
+        print(f"RFECV Cross-validation scores: {scores}", file=file)
+        print(f"RFECV Cross validation Mean accuracy: {scores.mean():.4f}", file=file)
         print(f"RFECV ranking: {rfecv.ranking_}", file=file)
         
         # Plot the RFECV feature data for visualization
         # Using Scatter plot
         plt.figure(figsize=(10, 6))
-        plt.xlabel("Number of Features Selected")
-        plt.ylabel("Cross-Validation Score (Accuracy)")
+        plt.xlabel("RFECV Number of Features Selected")
+        plt.ylabel("RFECV Cross-Validation Score (Accuracy)")
         plt.title("RFECV - Optimal Number of Features")
         plt.plot(range(1, len(rfecv.cv_results_['mean_test_score']) + 1), rfecv.cv_results_['mean_test_score'], marker='o')
         plt.grid()
@@ -165,27 +187,38 @@ class RFECV_EXPERIMENT:
         plt.show()
         
         id_features = pd.DataFrame(rfecv.ranking_)
+        id_features = id_features.rename(columns={0: "Feature Ranking"})
         
         sns.set(style="ticks", color_codes=True)
         sns.pairplot(id_features, diag_kind="kde")
         plt.show()
+
+        best_feature = X.columns[rfecv.support_]
+
+        # Step 4: Print results
+        print(f"RFECV Optimal number of features: {rfecv.n_features_}", file=file)
+        print(f"RFECV Best Selected features: {rfecv.support_}", file=file)
+        print(f"Best features : {best_feature}", file=file)
+        print(f"RFECV Cross-validation scores: {scores}", file=file)
+        print(f"RFECV Cross validation Mean accuracy: {scores.mean():.4f}", file=file)
+        print(f"RFECV ranking: {rfecv.ranking_}", file=file)
         
         # Step 5a: Evaluate the RFECV model using KFold cross_val_score
         scores = cross_val_score(rfecv.estimator_, X, y, cv=kf, scoring='accuracy')
         # Step 6: Print results
-        print(f"KF Optimal number of features: {rfecv.n_features_}", file=file)
-        print(f"KF Selected features: {rfecv.support_}", file=file)
-        print(f"KF Cross-validation scores: {scores}", file=file)
-        print(f"KF Mean accuracy: {scores.mean():.4f}", file=file)
-        print(f"KF RFECV ranking: {rfecv.ranking_}", file=file)
+        print(f"RFECV with KF Optimal number of features: {rfecv.n_features_}", file=file)
+        print(f"RFECV with KF Selected features: {rfecv.support_}", file=file)
+        print(f"RFECV with KF Cross-validation scores: {scores}", file=file)
+        print(f"RFECV with KF Mean accuracy: {scores.mean():.4f}", file=file)
+        print(f"RFECV with KF RFECV ranking: {rfecv.ranking_}", file=file)
         
-        print("Evaluating the DT Classification Model")
-       
-        print(f"Feature ranking: {features.ranking_}", file=file)
         importance = np.absolute(rfecv.estimator_.feature_importances_)
         print(f"Feature importance: {importance}", file,file)
         
         print("Selected Features:", selected_features)
+        
+        # Now use the RFECV features as input into the DT with GNB 
+        print("Evaluating the DT Classification Model")
 
         # Transform the dataset to include only selected features
         X_selected = rfecv.transform(X)
@@ -202,9 +235,9 @@ class RFECV_EXPERIMENT:
         print(f"DT training time: {dt_time}", file=file)
         
         # Plot the tree
-        plt.figure(figsize=(10, 8))
-        plot_tree(dt_model, filled=True)
-        plt.show()
+        #plt.figure(figsize=(10, 8))
+        #plot_tree(dt_model, filled=True)
+        #plt.show()
 
         y_pred = dt_model.predict(X_test)
         print(y_pred)
@@ -245,6 +278,14 @@ class RFECV_EXPERIMENT:
         plt.ylabel("Importance")
         plt.xticks(range(X_selected.shape[1]), np.array(X.columns)[indices], rotation=90, size=12)
         plt.show()
+        
+        dt_predictions = dt_model.predict(X_test)
+        
+        # Evaluate Decision Tree
+        print("Decision Tree Classifier:", file=file)
+        print(f"DT Accuracy: {accuracy_score(y_test, dt_predictions):.4f}", file=file)
+        dt_performance = classification_report(y_test, dt_predictions, zero_division=1.0)
+        print(f"\nDT Classification performance: \n {dt_performance}", file=file)
 
         fOne = cross_val_score(dt_model, X_train, y_train, cv=5)
 
@@ -263,6 +304,7 @@ class RFECV_EXPERIMENT:
         dt_num_classes = dt_model.n_classes_
         print(f"DT Number of class categories: {dt_num_classes}", file=file)
 
+        print(f"\nDT Classification performance: \n {dt_performance}", file=file)
         
         # Gaussian Naive Bayes Classifier
         gnb_model = GaussianNB()
@@ -272,7 +314,7 @@ class RFECV_EXPERIMENT:
         
         gnb_time = end_time - start_time
         
-        print(f"GNB traning time: {gnb_time}", file=file)
+        print(f"GNB training time: {gnb_time}", file=file)
         
         gnb_predictions = gnb_model.predict(X_test)
         
@@ -296,6 +338,16 @@ class RFECV_EXPERIMENT:
         gnb_num_classes = len(gnb_model.classes_)
         print(f"GNB Number of class categories: {gnb_num_classes}", file=file)
         
+        fOne = cross_val_score(gnb_model, X_train, y_train, cv=5)
+
+        # We print the F1 score here
+        print("Average GNB F1 score during cross-validation: ", np.mean(fOne))
+        print("GNB f1 scores: ", fOne.mean())
+
+        # Then print the F1 score to the output file
+        print(f"Average GNB F1 score during cross-validation: {np.mean(fOne)}", file=file)
+    
+        
         num_columns = X_train.shape[1]
         print(f"Number of columns in X_train: {num_columns}")
         num_columns = X_train.shape[0]
@@ -309,7 +361,8 @@ class RFECV_EXPERIMENT:
         # Evaluate Gaussian Naive Bayes
         print("Gaussian Naive Bayes Classifier:", file=file)
         print(f"GNB Accuracy: {accuracy_score(y_test, gnb_predictions):.4f}", file=file)
-        print(classification_report(y_test, gnb_predictions, zero_division=1.0), file=file)
+        gnb_cm = classification_report(y_test, gnb_predictions, zero_division=1.0)
+        print(f"\nGNB Classification Report: \n {gnb_cm}", file=file)
         
         # Combine using VotingClassifier
         voting_clf = VotingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], voting='hard')
@@ -317,8 +370,13 @@ class RFECV_EXPERIMENT:
         print(votingscore.predict(X_selected), file=file)
         
         y_pred = voting_clf.predict(X_test)
-        print("VotingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
-        print("VotingClassifier DT with GNB confusion matris: ", confusion_matrix(y_test, y_pred), file=file)
+        print("\nVotingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
+        print("\nVotingClassifier DT with GNB confusion matrix: \n", confusion_matrix(y_test, y_pred), file=file)
+        
+        voting_clf_classification = classification_report(y_test, y_pred, zero_division=1.0)
+        print(f"\nVoting Classification Report: \n {voting_clf_classification}", file=file)
+        voting_clf_cm = confusion_matrix(y_test, y_pred)
+        print(f"\nVoting Classifier Confusion Matrix: \n {voting_clf_cm}", file=file)
         
         # Combine DT with GNB using StackingClassifier and default final estimator
         stacking_clf = StackingClassifier(estimators=[('dt',dt_model), ('gnb', gnb_model)], final_estimator=LogisticRegression())
@@ -327,7 +385,7 @@ class RFECV_EXPERIMENT:
         # Evaluate
         y_pred = stacking_clf.predict(X_test)
         print("StackingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
-        print("StackingClassifier DT with GNB Confusion Matrix:", confusion_matrix(y_test, y_pred), file=file)
+        print("\nStackingClassifier DT with GNB Confusion Matrix: \n", confusion_matrix(y_test, y_pred), file=file)
        
         # Retrieve the number of unrelated class categories
         clf_num_omt_classes = len(stacking_clf.classes_)
@@ -336,6 +394,15 @@ class RFECV_EXPERIMENT:
         # Retrieve the number of class categories
         clf_num_classes = stacking_clf.classes_
         print(f"StackingClassifier DT with GNB Number of class categories: {clf_num_classes}", file=file)
+        
+        # Cross-validation scores
+        cv_scores = cross_val_score(stacking_clf, X, y, cv=5, scoring='accuracy')
+        print(f"Stacking Classifier Cross-Validation Scores: {cv_scores}", file=file)
+        print(f"Stacking Classifier Mean CV Accuracy: {cv_scores.mean():.2f}", file=file)
+        
+        # Detailed classification report
+        stacking_clf_performance = classification_report(y_test, y_pred, zero_division=1.0)
+        print(f"\nStacking Classification Report: \n {stacking_clf_performance}", file=file)
         
     def stop_all(self):
         print("Stopping the feature extraction and DT with GNB Classification")
@@ -350,8 +417,8 @@ def main():
         data = data_results
         file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/output_combined.txt", "a")
         print(f"Data under analysis: {analysis_file}", file=file)
-        #data_scaled = feature_selection.standardize_data(data)
-        #features = feature_selection.extract_features(data_scaled)
+        data_scaled = feature_selection.standardize_data(data)
+        #feature_selection.extract_features(data_scaled, file)
         feature_selection.extract_features(data, file)
         file.close()
         feature_selection.stop_all()
@@ -359,6 +426,4 @@ def main():
         feature_selection.stop_all()
 
 if __name__ == '__main__':
-
-
     main()
