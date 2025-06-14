@@ -1,0 +1,362 @@
+Data under analysis: c:/Phd/DIS9903A/ConductExperiment/DataCollection/Source\../Day7/20250609_Capture1_convert.csv
+RFECV Execution time: 1.297897 seconds
+Selected Features: ['Length']
+RFECV Optimal number of features: 1
+RFECV Best Selected features: [False False False False  True]
+Best features : Index(['Length'], dtype='object')
+RFECV Cross-validation scores: [0.98791492 0.98904286 0.98791492 0.98807606 0.989204  ]
+RFECV Cross validation Mean accuracy: 0.9884
+RFECV ranking: [2 3 5 4 1]
+
+Number of selected features: 1
+Number of omitted features: 4
+
+RFECV Prediction: [14 14 14 ...  2 10  2]
+RFECV Number of duplicate features: 0
+
+KF Optimal number of features: 1
+KF Selected features: [False False False False  True]
+KF Cross-validation scores: [0.98984853 0.98888173 0.98598131 0.98807606 0.98710925]
+KF Mean accuracy: 0.9880
+KF RFECV ranking: [2 3 5 4 1]
+DT Model Execution time: 0.003057 seconds
+Decision Tree F1 Score for class 0: 0.9965156794425087
+Decision Tree F1 Score for class 1: 0.0
+Decision Tree F1 Score for class 2: 1.0
+Decision Tree F1 Score for class 3: 0.0
+Decision Tree F1 Score for class 4: 1.0
+Decision Tree F1 Score for class 5: 0.9997550820475141
+Decision Tree F1 Score for class 6: 1.0
+Decision Tree F1 Score for class 7: 1.0
+Decision Tree F1 Score for class 8: 0.0
+Decision Tree F1 Score for class 9: 0.0
+Decision Tree F1 Score for class 10: 0.5901639344262295
+Decision Tree F1 Score for class 11: 0.0
+Decision Tree F1 Score for class 12: 0.0
+Decision Tree F1 Score for class 13: 0.0
+Decision Tree F1 Score for class 14: 1.0
+Decision Tree F1 Score for class 15: 0.8571428571428571
+
+DT Classifier Accuracy: 0.9908153399935546
+DT Classifier Precision: 0.9631981556721003
+DT Classifier Recall: 0.546875
+Decision Tree Classifier:
+DT Accuracy: 0.9908
+
+DT Classification performance: 
+               precision    recall  f1-score   support
+
+           0       0.99      1.00      1.00       858
+           1       1.00      0.00      0.00         6
+           2       1.00      1.00      1.00         4
+           3       1.00      0.00      0.00         4
+           4       1.00      1.00      1.00      2041
+           5       1.00      1.00      1.00      2041
+           6       1.00      1.00      1.00      1129
+           7       1.00      1.00      1.00        19
+           8       1.00      0.00      0.00         2
+           9       1.00      0.00      0.00         2
+          10       0.42      1.00      0.59        36
+          11       1.00      0.00      0.00        36
+          12       1.00      0.00      0.00         4
+          13       1.00      0.00      0.00         2
+          14       1.00      1.00      1.00        18
+          15       1.00      0.75      0.86         4
+
+    accuracy                           0.99      6206
+   macro avg       0.96      0.55      0.53      6206
+weighted avg       1.00      0.99      0.99      6206
+
+DT Number of unrelated class categories: 16
+DT Number of class categories: 16
+Decision Tree Binary Classification Accuracy: 0.99
+GNB Model Execution time: 0.001999 seconds
+
+GNB Number of class categories: 16
+
+Average GNB F1 score during cross-validation: 0.8032146459543963
+Number of columns in X_train: 1
+Number of rows in X_train: 24824
+Number of columns in X_test: 1
+Number of rows in X_train: 24824
+
+Gaussian Naive Bayes Classifier:
+
+GNB Accuracy: 0.8113
+
+GNB Classification performance: 
+               precision    recall  f1-score   support
+
+           0       1.00      0.00      0.00       858
+           1       1.00      0.00      0.00         6
+           2       1.00      1.00      1.00         4
+           3       1.00      0.00      0.00         4
+           4       0.94      0.97      0.95      2041
+           5       0.96      0.91      0.93      2041
+           6       1.00      1.00      1.00      1129
+           7       1.00      1.00      1.00        19
+           8       1.00      0.00      0.00         2
+           9       0.50      1.00      0.67         2
+          10       0.42      1.00      0.59        36
+          11       1.00      0.00      0.00        36
+          12       0.00      1.00      0.01         4
+          13       1.00      0.00      0.00         2
+          14       1.00      0.94      0.97        18
+          15       0.04      0.75      0.08         4
+
+    accuracy                           0.81      6206
+   macro avg       0.80      0.60      0.45      6206
+weighted avg       0.96      0.81      0.81      6206
+
+
+DT and GNB Voting Classifier Execution time: 0.006005 seconds
+ [0 5 4 ... 4 4 5] 
+
+Voting Classifier DT with GNB Accuracy: 0.9908153399935546
+
+Voting Classifier DT with GNB confusion matrix: 
+ [[ 856    0    0    0    0    0    0    0    0    2    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    6    0    0    0
+     0    0]
+ [   0    0    4    0    0    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    4    0    0    0
+     0    0]
+ [   0    0    0    0 2041    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0 2041    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0 1129    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0   19    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    2    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    2    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0   36    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0   36    0    0    0
+     0    0]
+ [   4    0    0    0    0    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    2    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    18    0]
+ [   0    0    0    0    0    1    0    0    0    0    0    0    0    0
+     0    3]]
+
+Voting Classification Report: 
+               precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00       858
+           1       1.00      0.00      0.00         6
+           2       1.00      1.00      1.00         4
+           3       1.00      0.00      0.00         4
+           4       1.00      1.00      1.00      2041
+           5       1.00      1.00      1.00      2041
+           6       1.00      1.00      1.00      1129
+           7       1.00      1.00      1.00        19
+           8       1.00      0.00      0.00         2
+           9       0.50      1.00      0.67         2
+          10       0.42      1.00      0.59        36
+          11       1.00      0.00      0.00        36
+          12       1.00      0.00      0.00         4
+          13       1.00      0.00      0.00         2
+          14       1.00      1.00      1.00        18
+          15       1.00      0.75      0.86         4
+
+    accuracy                           0.99      6206
+   macro avg       0.93      0.61      0.57      6206
+weighted avg       1.00      0.99      0.99      6206
+
+
+Voting Classifier Confusion Matrix: 
+ [[ 856    0    0    0    0    0    0    0    0    2    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    6    0    0    0
+     0    0]
+ [   0    0    4    0    0    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    4    0    0    0
+     0    0]
+ [   0    0    0    0 2041    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0 2041    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0 1129    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0   19    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    2    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    2    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0   36    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0   36    0    0    0
+     0    0]
+ [   4    0    0    0    0    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    2    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    18    0]
+ [   0    0    0    0    0    1    0    0    0    0    0    0    0    0
+     0    3]]
+DT with GNB Stacking Classifier Execution time: 0.893337 seconds
+
+Stacking Classifier Best Parameters: {'dt__criterion': 'gini', 'dt__max_depth': None, 'dt__min_samples_leaf': 1, 'dt__min_samples_split': 2, 'final_estimator__C': 1, 'gnb__var_smoothing': 1e-09}
+Stacking Classifier Best Accuracy: 0.9904930793047099
+
+Stacking Classifier Mean CV Accuracy: 0.9525
+
+Stacking Classifier STD Cross-Validation Accuracy: 0.0813
+
+Stacking Classifier DT with GNB Accuracy: 0.9908153399935546
+Stacking Classifier DT with GNB Confusion Matrix: 
+ [[ 858    0    0    0    0    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    6    0    0    0
+     0    0]
+ [   0    0    4    0    0    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    4    0    0    0
+     0    0]
+ [   0    0    0    0 2041    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0 2041    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0 1129    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0   19    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    2    0    0    0
+     0    0]
+ [   2    0    0    0    0    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0   36    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0   36    0    0    0
+     0    0]
+ [   4    0    0    0    0    0    0    0    0    0    0    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    2    0    0    0
+     0    0]
+ [   0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    18    0]
+ [   0    0    0    0    0    1    0    0    0    0    0    0    0    0
+     0    3]]
+Stacking Classifier DT with GNB  Number of unrelated class categories: 
+ 16
+Stacking Classifier DT with GNB Number of class categories: [ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15]
+
+Stacking Classification  Report: 
+              precision    recall  f1-score   support
+
+           0       0.99      1.00      1.00       858
+           1       1.00      0.00      0.00         6
+           2       1.00      1.00      1.00         4
+           3       1.00      0.00      0.00         4
+           4       1.00      1.00      1.00      2041
+           5       1.00      1.00      1.00      2041
+           6       1.00      1.00      1.00      1129
+           7       1.00      1.00      1.00        19
+           8       1.00      0.00      0.00         2
+           9       1.00      0.00      0.00         2
+          10       0.42      1.00      0.59        36
+          11       1.00      0.00      0.00        36
+          12       1.00      0.00      0.00         4
+          13       1.00      0.00      0.00         2
+          14       1.00      1.00      1.00        18
+          15       1.00      0.75      0.86         4
+
+    accuracy                           0.99      6206
+   macro avg       0.96      0.55      0.53      6206
+weighted avg       1.00      0.99      0.99      6206
+
+No multiple Features identified therefore going to use one feature identified
+No multiple Features identified therefore going to use one feature identified
+One ANOVA Statistical Significance for RFECV features identified
+F-statistic: 1028.7963740885186
+P-value: 0.0
+Significant differences exist between the groups.
+One ANOVA Statistical Significance for Decision Tree features identified
+F-statistic: 649.8609208728911
+P-value: 0.0
+Significant differences exist between the groups.
+One ANOVA Statistical Significance for GNB features identified
+F-statistic: 649.860920865156
+P-value: 0.0
+Significant differences exist between the groups.
+One ANOVA Statistical Significance for DT with GNB Voting stacking features identified
+F-statistic: 649.8609208728654
+P-value: 0.0
+Significant differences exist between the groups.
+One ANOVA Statistical Significance for DT with GNB Combined features identified
+F-statistic: 649.8609208728911
+P-value: 0.0
+Significant differences exist between the groups.
+
+Two-group t-test for Source Address and RFECV features identified
+T-statistic: 71.94695101078085, P-value: 0.0
+Significant differences exist between the groups.
+
+Two-group t-test for Destination Address and RFECV features identified
+T-statistic: 32.037015138300944, P-value: 2.233090346249311e-223
+Significant differences exist between the groups.
+
+Two-group t-test for Protocol and RFECV features identified
+T-statistic: 23.999760046603, P-value: 1.0605865297648497e-126
+Significant differences exist between the groups.
+Wilcox Signed Rank Statistical Results: 0.0, p-value: 0.0
+
+Two-group t-test for Length and RFECV features identified
+T-statistic: 769.431273592934, P-value: 0.0
+Significant differences exist between the groups.
+
+Two-group t-test for Source Address and DT with GNB features identified
+T-statistic: 32.175308993503464, P-value: 4.640838540480042e-224
+Significant differences exist between the groups.
+
+Two-group t-test for Destination Address and DT with GNB features identified
+T-statistic: 14.327234814299583, P-value: 1.9658725817671988e-46
+Significant differences exist between the groups.
+
+Two-group t-test for Protocol and DT with GNB features identified
+T-statistic: 10.73290021546942, P-value: 7.807398022397943e-27
+Significant differences exist between the groups.
+
+Two-group t-test for Length and DT with GNB features identified
+T-statistic: 344.76584624844855, P-value: 0.0
+Significant differences exist between the groups.
+
+OLS Summary: 
+                             OLS Regression Results                            
+==============================================================================
+Dep. Variable:                      0   R-squared:                       0.005
+Model:                            OLS   Adj. R-squared:                  0.005
+Method:                 Least Squares   F-statistic:                     151.3
+Date:                Fri, 13 Jun 2025   Prob (F-statistic):           1.07e-34
+Time:                        21:45:34   Log-Likelihood:                -43954.
+No. Observations:               31030   AIC:                         8.791e+04
+Df Residuals:                   31028   BIC:                         8.793e+04
+Df Model:                           1                                         
+Covariance Type:            nonrobust                                         
+==================================================================================
+                     coef    std err          t      P>|t|      [0.025      0.975]
+----------------------------------------------------------------------------------
+const           5.725e-17      0.006   1.01e-14      1.000      -0.011       0.011
+Source_address     0.0697      0.006     12.302      0.000       0.059       0.081
+==============================================================================
+Omnibus:                     6391.903   Durbin-Watson:                   2.116
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):            12627.471
+Skew:                          -1.247   Prob(JB):                         0.00
+Kurtosis:                       4.883   Cond. No.                         1.00
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+Stopping the RFECV feature extraction and DT with GNB Classification experiment
