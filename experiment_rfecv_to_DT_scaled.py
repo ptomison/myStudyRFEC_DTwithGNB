@@ -28,6 +28,8 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder, TargetEncoder
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, f1_score
 from sklearn.naive_bayes import GaussianNB #, CategoricalNB
 from yellowbrick.features import FeatureImportances
+from scipy.stats import f_oneway, ttest_ind, mannwhitneyu, wilcoxon, kruskal, chi2_contingency
+import statsmodels.api as sm
 
 class RFECV_EXPERIMENT:
     
@@ -103,7 +105,7 @@ class RFECV_EXPERIMENT:
         y = data[y_col]
         
         le = LabelEncoder()
-        y = le.fit_transform(y)  # Converts categories to integers
+        y = le.fit_transform(y)  # Converts categories to integers to resolve continous problem
         #print(y)
         
         X = data.drop([y_col], axis = 1)
@@ -146,9 +148,9 @@ class RFECV_EXPERIMENT:
         print("RFECV model fitting complete")
         
         # Get the names of the selected features
-        selected_features = [name for name, selected in zip(feature_names, rfecv.support_) if selected]
+        selected_features_names = [name for name, selected in zip(feature_names, rfecv.support_) if selected]
 
-        print(f"Selected Features: {selected_features}", file=file)
+        print(f"Selected Features: {selected_features_names}", file=file)
         
         # Step 5: Evaluate the RFECV model using StrartifiedKFold cross_val_score
         #scores = cross_val_score(rfecv.estimator_, X_train, y_train, cv=cv, scoring='accuracy')
@@ -171,12 +173,12 @@ class RFECV_EXPERIMENT:
         #num_omitted_features = X.shape[1] - features_selected
         num_omitted_features = (~rfecv.support_).sum()
         
-        print(f"Number of selected features: {num_selected_features}", file=file)
+        print(f"\nNumber of selected features: {num_selected_features}", file=file)
         print(f"Number of omitted features: {num_omitted_features}", file=file)
         print("Number of omitted features: ", num_omitted_features)
         
         # Step 6a: Make predictions on the test set
-        y_pred = rfecv.estimator_.predict(features)
+        y_pred_rfecv = rfecv.estimator_.predict(features)
         
         # Not helping need to use the other heatmaps
         #ranking = confusion_matrix(y_train, y_pred).ravel()
@@ -185,7 +187,7 @@ class RFECV_EXPERIMENT:
         #cm_normalized = ranking_2d.astype('float') / ranking_2d.sum(axis=0)[:, np.newaxis]
         #sns.heatmap(cm_normalized, annot=True, linewidths = 0.01)
         
-        print(f"RFECV Prediction: {y_pred}", file=file)
+        print(f"\nRFECV Prediction: {y_pred_rfecv}", file=file)
         
         # Plot the RFECV feature data for visualization
         print('Optimal number of features :', rfecv.n_features_)
@@ -239,7 +241,7 @@ class RFECV_EXPERIMENT:
         # Step 5a: Evaluate the RFECV model using KFold cross_val_score
         scores = cross_val_score(rfecv.estimator_, X, y, cv=kf, scoring='accuracy')
         # Step 6: Print results
-        print(f"KF Optimal number of features: {rfecv.n_features_}", file=file)
+        print(f"\nKF Optimal number of features: {rfecv.n_features_}", file=file)
         print(f"KF Selected features: {rfecv.support_}", file=file)
         print(f"KF Cross-validation scores: {scores}", file=file)
         print(f"KF Mean accuracy: {scores.mean():.4f}", file=file)
@@ -267,24 +269,31 @@ class RFECV_EXPERIMENT:
         
         dt_predictions = dt_model.predict(X_test)
         
-        y_pred = dt_model.predict(X_test)
+        y_pred_dt = dt_model.predict(X_test)
         
-        accuracy = accuracy_score(y_test, y_pred)
-        precision = precision_score(y_test, y_pred, average='macro', zero_division=1.0)
-        recall = recall_score(y_test, y_pred, average='macro')
+        # Generate and plot the confusion matrix
+        cm = confusion_matrix(y_test, y_pred_dt, labels=dt_model.classes_)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=dt_model.classes_)
+        disp.plot(cmap=plt.cm.Blues)
+        plt.show()
+        
+        accuracy = accuracy_score(y_test, y_pred_dt)
+        precision = precision_score(y_test, y_pred_dt, average='macro', zero_division=1.0)
+        recall = recall_score(y_test, y_pred_dt, average='macro')
        
         # Calculate F1 score for each class
-        f1_scores = f1_score(y_test, y_pred, average=None)
+        f1_scores = f1_score(y_test, y_pred_dt, average=None)
 
         # Display F1 scores for each class
         for i, score in enumerate(f1_scores):
-            print(f"Decison Tree F1 Score for class {i}: {score}", file=file)
+            print(f"Decision Tree F1 Score for class {i}: {score}", file=file)
 
-        print("DT Classifier Accuracy:", accuracy, file=file)
+        print("\nDT Classifier Accuracy:", accuracy, file=file)
         print("DT Classifier Precision:", precision, file=file)
         print("DT Classifier Recall:", recall, file=file)
         print("Decision Tree Classifier:", file=file)
         print(f"DT Accuracy: {accuracy_score(y_test, dt_predictions):.4f}", file=file)
+        
         dt_performance = classification_report(y_test, dt_predictions, zero_division=1.0)
         print(f"\nDT Classification performance: \n {dt_performance}", file=file)
 
@@ -297,7 +306,7 @@ class RFECV_EXPERIMENT:
         print(f"DT Number of class categories: {dt_num_classes}", file=file)
 
         viz = FeatureImportances(dt_model)
-        viz.fit(X, y)
+        viz.fit(X_train, y_train)
         viz.show()
         
         importances = dt_model.feature_importances_
@@ -351,8 +360,7 @@ class RFECV_EXPERIMENT:
         gnb_predictions = gnb_model.predict(X_test)
         
         # Plot confusion matrix
-        y_pred = gnb_model.predict(X_test)
-        ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
+        ConfusionMatrixDisplay.from_predictions(y_test, gnb_predictions)
         
         # Predict probabilities
         y_proba = gnb_model.predict_proba(X_test)
@@ -395,25 +403,6 @@ class RFECV_EXPERIMENT:
         gnb_performance = classification_report(y_test, gnb_predictions, zero_division=1.0)
         print(f"\nGNB Classification performance: \n {gnb_performance}", file=file)
         
-        # Combine using VotingClassifier
-        start_time = time.time()
-        voting_clf = VotingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], voting='soft')
-        votingscore = voting_clf.fit(X_train, y_train)
-        end_time = time.time()
-        
-        print(f"\nDT and GNB Voting Classifier Execution time: {end_time - start_time:.6f} seconds", file=file)
-        
-        print(votingscore.predict(X_selected), file=file)
-        
-        y_pred = voting_clf.predict(X_test)
-        print("\nVotingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
-        print("\nVotingClassifier DT with GNB confusion matrix: \n", confusion_matrix(y_test, y_pred), file=file)
-        
-        voting_clf_classification = classification_report(y_test, y_pred, zero_division=1.0)
-        print(f"\nVoting Classification Report: \n {voting_clf_classification}", file=file)
-        voting_clf_cm = confusion_matrix(y_test, y_pred)
-        print(f"\nVoting Classifier Confusion Matrix: \n {voting_clf_cm}", file=file)
-        
         # Define base models and meta-classifier
         base_models = [
             ('dt', DecisionTreeClassifier()),
@@ -422,6 +411,26 @@ class RFECV_EXPERIMENT:
         
         # Combine DT with GNB using StackingClassifier and default final estimator
         meta_classifier = LogisticRegression(max_iter=500, solver="saga", tol=1e-2)
+        
+        # Combine using VotingClassifier
+        start_time = time.time()
+        voting_clf = VotingClassifier(estimators=base_models, voting='soft')
+        votingscore = voting_clf.fit(X_train, y_train)
+        end_time = time.time()
+        
+        print(f"\nDT and GNB Voting Classifier Execution time: {end_time - start_time:.6f} seconds", file=file)
+        
+        voting_predict = votingscore.predict(X_test)
+        print((f" {voting_predict} "), file=file)
+        
+        y_pred_voting = voting_clf.predict(X_test)
+        print("\nVoting Classifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred_voting), file=file)
+        print("\nVoting Classifier DT with GNB confusion matrix: \n", confusion_matrix(y_test, y_pred_voting), file=file)
+        
+        voting_clf_classification = classification_report(y_test, y_pred_voting, zero_division=1.0)
+        print(f"\nVoting Classification Report: \n {voting_clf_classification}", file=file)
+        voting_clf_cm = confusion_matrix(y_test, y_pred_voting)
+        print(f"\nVoting Classifier Confusion Matrix: \n {voting_clf_cm}", file=file)
         
         # Define hyperparameter grid
         #param_grid = {
@@ -447,12 +456,6 @@ class RFECV_EXPERIMENT:
         # Perform grid search
         stacking_clf = GridSearchCV(estimator=stacking_clf, param_grid=optimal_params, cv=3, scoring='accuracy')
         stacking_clf.fit(X_train, y_train)
-        
-        #stacking_clf = StackingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], final_estimator=LogisticRegression())
-        #stacking_clf.fit(X_train, y_train).score(X_test, y_test)
-        
-
-        ##stacking_clf.fit(X_train, y_train).score(X_test, y_test)
         end_time = time.time()
         print(f"DT with GNB Stacking Classifier Execution time: {end_time - start_time:.6f} seconds", file=file)
         
@@ -462,8 +465,8 @@ class RFECV_EXPERIMENT:
 
         # Perform cross-validation
         cv_scores = cross_val_score(stacking_clf, X, y, cv=5, scoring='accuracy')
-        print(f"\nCross-Validation Accuracy: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}", file=file)
-        print(f"\nStacking Classifier Mean CV Accuracy: {cv_scores.mean():.2f}", file=file)
+        print(f"\nStacking Classifier Mean CV Accuracy: {cv_scores.mean():.4f}", file=file)
+        print(f"\nStacking Classifier STD Cross-Validation Accuracy: {cv_scores.std():.4f}", file=file)
 
         #feature_importances = stacking_clf.named_estimators_['dt'].feature_importances_
         #plt.barh(feature_names, feature_importances)
@@ -473,33 +476,201 @@ class RFECV_EXPERIMENT:
         #plt.show()
 
         # Evaluate performance
-        y_pred = stacking_clf.predict(X_test)
-        print("\nStackingClassifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred), file=file)
-        print("StackingClassifier DT with GNB Confusion Matrix: \n", confusion_matrix(y_test, y_pred), file=file)
+        y_pred_stacking = stacking_clf.predict(X_test)
+        print("\nStacking Classifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred_stacking), file=file)
+        print("Stacking Classifier DT with GNB Confusion Matrix: \n", confusion_matrix(y_test, y_pred_stacking), file=file)
        
         # Retrieve the number of unrelated class categories
         clf_num_omt_classes = len(stacking_clf.classes_)
-        print(f"StackingClassifier DT with GNB  Number of unrelated class categories: \n {clf_num_omt_classes}", file=file)
+        print(f"Stacking Classifier DT with GNB  Number of unrelated class categories: \n {clf_num_omt_classes}", file=file)
         
         # Retrieve the number of class categories
         clf_num_classes = stacking_clf.classes_
-        print(f"StackingClassifier DT with GNB Number of class categories: {clf_num_classes}", file=file)
+        print(f"Stacking Classifier DT with GNB Number of class categories: {clf_num_classes}", file=file)
         
         # Detailed classification report
-        stacking_clf_performance = classification_report(y_test, y_pred, zero_division=1.0)
+        stacking_clf_performance = classification_report(y_test, y_pred_stacking, zero_division=1.0)
         print(f"\nStacking Classification  Report: \n{stacking_clf_performance}", file=file)
         
-        return X_selected
+        return X_selected, selected_features_names, y_pred_rfecv, dt_predictions, gnb_predictions, y_pred_voting, y_pred_stacking, X_test
     
-    def stop_all(self):
-        print("Stopping the feature extraction and DT with GNB Classification")
+    def stop_all(self, file):
+        print("\nStopping the RFECV feature extraction and DT with GNB Classification experiment", file=file)
         pass
     
+class Data_Analysis:
     
+    def init(self, data_scaled, features, selected_features_names):
+        self.data_scaled = [0][0]
+        self.x = [0][0]
+        self.y = [0]
+       
+    def oneAnova_MFeatures(self, data_scaled, features, selected_features_names, file):  
+        source = data_scaled.Source_address
+        length = data_scaled.Length
+        feature = pd.DataFrame(features, columns = selected_features_names)
+        index = len(selected_features_names)
+        i = 0
+        if (index > 1):
+            for column in feature.columns:
+                # Perform one-way ANOVA if the features were selected
+                if (column == selected_features_names[i]):
+                    features = feature[column]
+                    data = data_scaled[column]
+                    name = selected_features_names[i]
+                    f_statistic, p_value = f_oneway(source, data,features)
+                    print(f"F-statistic for : {name}, {f_statistic}", file=file)
+                    print(f"P-value: {p_value:.6f}", file=file)
+                    # Interpretation
+                    if p_value < 0.05:
+                        print("Significant differences exist between the groups.", file=file)
+                    else:
+                        print("No significant differences between the groups.", file=file)
+                    stat, p = kruskal(source, data, features)
+                    print(f"Kruskal Statistical Results for source and {name}, {stat}, p-value: {p:.6f}", file=file)
+                    stat = 0
+                    p = 0
+                    stat, p = kruskal(length, data, features)
+                    print(f"Kruskal Statistical Results for length for {name}, {stat}, p-value: {p:.6f}", file=file)
+                    i = i+1
+                    f_statistic = 0
+                    p_value = 0
+                    stat = 0
+                    p = 0
+                elif (i == index):
+                    break
+        else:      
+            print("No multiple Features identified therefore going to use one feature identified", file=file)
+        
+    def oneAnova(self, data_scaled, features, file):  
+        source = data_scaled.Source_address
+        destination = data_scaled.Destination_address
+        protocol = data_scaled.Destination_address
+        length = data_scaled.Length
+        f_statistic, p_value = f_oneway(source, destination, protocol, length, features)
+        # Output results
+        print(f"F-statistic: {f_statistic}",file=file)
+        print(f"P-value: {p_value}", file=file)
+
+        # Interpretation
+        if p_value < 0.05:
+            print("Significant differences exist between the groups.", file=file)
+        else:
+            print("No significant differences between the groups.", file=file)
+    
+    def mannWhitneyU(self, data_scaled, features, file):
+        source = data_scaled.Source_address
+        destination = data_scaled.Destination_address
+        protocol = data_scaled.Destination_address
+        length = data_scaled.Length
+        
+        stat, p = mannwhitneyu(source, features, alternative='two-sided')
+        print(f"Mann-Whitney U Test Statistic on Source and Features: {stat}, p-value: {p:.6f}")
+        stat, p = mannwhitneyu(destination, features, alternative='two-sided')
+        print(f"Mann-Whitney U Test Statisticon on destination and feature: {stat}, p-value: {p:.6f}")
+        stat, p = mannwhitneyu(protocol, features, alternative='two-sided')
+        print(f"Mann-Whitney U Test Statistic on protocol and features: {stat}, p-value: {p:.6f}")
+        stat, p = mannwhitneyu(length ,features, alternative='two-sided')
+        print(f"Mann-Whitney U Test Statistic on length and features: {stat}, p-value: {p:.6f}")
+    
+    def tTest_NFeatures(self, data_scaled, features, selected_features_names, file):
+        feature = pd.DataFrame(features, columns = selected_features_names)
+        source = data_scaled.Source_address
+        length = data_scaled.Length
+        # Perform two-sample t-test
+        index = len(selected_features_names)
+        i = 0
+        if (index > 1):
+            for column in feature.columns:
+                # Perform two sample t-test on the features that were selected 
+                if (column == selected_features_names[i]):
+                    features = feature[column]
+                    name = selected_features_names[i]
+                    t_stat, p_value = ttest_ind(source,features)
+                    print(f"T-statistic for Source and name: {name}, {t_stat}, P-value: {p_value}", file=file)
+                    # Interpretation
+                    if p_value < 0.05:
+                        print("Significant differences exist between the groups.", file=file)
+                    else:
+                        print("No significant differences between the groups.", file=file)
+                    t_stat = 0
+                    p_value = 0
+                    t_stat, p_value = ttest_ind(length,features)
+                    print(f"T-statistic for length and name: {name}, {t_stat}, P-value: {p_value:.6f}", file=file)
+                    # Interpretation
+                    if p_value < 0.05:
+                        print("Significant differences exist between the groups.", file=file)
+                    else:
+                        print("No significant differences between the groups.", file=file)
+                    stat, p = mannwhitneyu(source, features, alternative='two-sided')
+                    print(f"Mann-Whitney U Test Statistic for source and name: {stat}, p-value: {p:.6f}", file=file) 
+                    i = i+1
+                    t_stat = 0
+                    p_value = 0
+                    stat = 0
+                    p = 0
+                elif (i == index):
+                    break
+        else:      
+            print("No multiple Features identified therefore going to use one feature identified", file=file)
+    
+    
+    def tTest(self, data, feature, file):
+        t_stat, p_value = ttest_ind(data,feature)
+        print(f"T-statistic: {t_stat}, P-value: {p_value:.6f}", file=file)
+        if p_value < 0.05:
+              print("Significant differences exist between the groups.", file=file)
+        else:
+              print("No significant differences between the groups.", file=file)
+        
+    def olsTest_NFeature(self, data, features, selected_features_names, file):
+        feature = pd.DataFrame(features, columns = selected_features_names)
+        source = data.Source_address
+        length = data.Length
+        
+        # Perform ols test
+        index = len(selected_features_names)
+        i = 0
+        if (index > 1):
+            for column in feature.columns:
+                # Perform two sample t-test on the features that were selected 
+                if (column == selected_features_names[i]):
+                    y = feature[column]
+                    #x = data[column]
+                    x = source
+                    name = selected_features_names[i]
+                    #add constant to predictor variables
+                    x = sm.add_constant(x)
+                    #fit linear regression model
+                    model = sm.OLS(y, x).fit()
+                    #view model summary
+                    ols_results = model.summary()
+                    print(f"\nOLS Summary for source and : {name}\n {ols_results}", file=file)
+                    x = length
+                    #add constant to predictor variables
+                    x = sm.add_constant(x)
+                    #fit linear regression model
+                    model = sm.OLS(y, x).fit()
+                    #view model summary
+                    ols_results = model.summary()
+                    print(f"\nOLS Summary for length and : {name}\n {ols_results}", file=file)
+                    i = i+1
+                elif (i == index):
+                    break
+        
+        
 def main():
     print("Run the script")
     features = []
+    dt_predictions = [0]
+    gnb_predictions = [0]
+    y_pred_voting = [0]
+    y_pred_stacking = [0]
+    y_pred_rfecv = [0]
+    testing_data = [0]
+    selected_features_names = [0];
     feature_selection = RFECV_EXPERIMENT()
+    data_analysis = Data_Analysis()
     
     try:
         data_results, analysis_file = feature_selection.open_file()
@@ -507,19 +678,92 @@ def main():
         file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/output_combined_updated.txt", "a")
         print(f"Data under analysis: {analysis_file}", file=file)
         data_scaled, target_data = feature_selection.standardize_data(data)
-        features = feature_selection.extract_features(data_scaled, file)
-        file.close()
-        with open('C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/feartures_output.txt', 'w') as file:
+        features, selected_features_names, y_pred_rfecv, dt_predictions, gnb_predictions, y_pred_voting, y_pred_stacking, testing_data = feature_selection.extract_features(data_scaled, file)
+        with open('C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/Combined_feartures_output.txt', 'w') as feature_file:
             for item in features:
-                file.write(f"{item}\n")
+                feature_file.write(f"{item}\n")
+        feature_file.close()
+        
+        data_analysis.oneAnova_MFeatures(data, features, selected_features_names, file)
+        data_analysis.tTest_NFeatures(data, features, selected_features_names, file)
+        
+        # see if the models predicitions has statstical significance
+        print("One ANOVA Statistical Significance for RFECV features identified", file=file)
+        data_analysis.oneAnova(data, y_pred_rfecv, file)
+        print("One ANOVA Statistical Significance for Decision Tree features identified", file=file)
+        data_analysis.oneAnova(data, dt_predictions, file)
+        print("One ANOVA Statistical Significance for GNB features identified", file=file)
+        data_analysis.oneAnova(data, gnb_predictions, file)
+        print("One ANOVA Statistical Significance for DT with GNB Voting stacking features identified", file=file)
+        data_analysis.oneAnova(data, y_pred_voting, file)
+        print("One ANOVA Statistical Significance for DT with GNB Combined features identified", file=file)
+        data_analysis.oneAnova(data, y_pred_stacking, file)
+        
+        print("\nTwo-group t-test for Source Address and RFECV features identified", file=file)
+        data_analysis.tTest(data.Source_address, y_pred_rfecv, file )
+        stat, p = wilcoxon(data.Source_address, y_pred_rfecv)
+        print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}", file=file)
+        
+        print("\nTwo-group t-test for Destination Address and RFECV features identified", file=file)
+        data_analysis.tTest(data.Destination_address, y_pred_rfecv, file )
+        stat, p = wilcoxon(data.Destination_address, y_pred_rfecv)
+        print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}", file=file)
+       
+        print("\nTwo-group t-test for Protocol and RFECV features identified", file=file)
+        data_analysis.tTest(data.protocol_converted, y_pred_rfecv, file )
+        stat, p = wilcoxon(data.protocol_converted, y_pred_rfecv)
+        print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}", file =file)
+       
+        print("\nTwo-group t-test for Length and RFECV features identified", file=file)
+        data_analysis.tTest(data.Length, y_pred_rfecv, file )
+        stat, p = wilcoxon(data.Length, y_pred_rfecv)
+        print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}", file=file)
+       
+        print("\nTwo-group t-test for Source Address and DT with GNB features identified", file=file)
+        data_analysis.tTest(data.Source_address, y_pred_stacking, file )
+        #stat, p = wilcoxon(testing_data[1:], y_pred_stacking)
+        #print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}")
+       
+        print("\nTwo-group t-test for Destination Address and DT with GNB features identified", file=file)
+        data_analysis.tTest(data.Destination_address, y_pred_stacking, file )
+        #stat, p = wilcoxon(data.Destination_address, y_pred_stacking)
+        #print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}")
+       
+        print("\nTwo-group t-test for Protocol and DT with GNB features identified", file=file)
+        data_analysis.tTest(data.protocol_converted, y_pred_stacking, file )
+        #stat, p = wilcoxon(data.protocol_converted, y_pred_stacking)
+        #print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}")
+       
+        print("\nTwo-group t-test for Length and DT with GNB features identified", file=file)
+        data_analysis.tTest(data.Length, y_pred_stacking, file )
+        #stat, p = wilcoxon(data.Length, y_pred_stacking)
+        #print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}")
+       
+        index = len(selected_features_names)
+        if (index > 1):
+            data_analysis.olsTest_NFeature(data_scaled, features, selected_features_names, file)
+        else:
+            # Fit the ordinary least sqaure model
+            #define predictor and response variables
+            y = pd.DataFrame(features)
+            y = y.iloc[:, :1]
+            x = data_scaled['Source_address']
+            #add constant to predictor variables
+            x = sm.add_constant(x)
+            #fit linear regression model
+            model = sm.OLS(y, x).fit()
+            #view model summary
+            ols_results = model.summary()
+            print(f"\nOLS Summary: \n {ols_results}", file=file)
+
+       
+        feature_selection.stop_all(file)
         file.close()
-        feature_selection.stop_all()
+        
     except KeyboardInterrupt:
         feature_selection.stop_all()
 
 if __name__ == '__main__':
 
-
     main()
 
-    
