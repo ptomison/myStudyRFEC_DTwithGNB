@@ -25,7 +25,7 @@ from sklearn.ensemble import RandomForestClassifier, StackingClassifier, VotingC
 from sklearn.linear_model import LogisticRegression #, LinearRegression, 
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.preprocessing import StandardScaler #, OneHotEncoder, LableEncoder
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, roc_curve, auc, roc_auc_score
 from sklearn.naive_bayes import GaussianNB
 from yellowbrick.features import FeatureImportances
 from scipy.stats import f_oneway, ttest_ind, mannwhitneyu, wilcoxon, kruskal, chi2_contingency
@@ -364,6 +364,31 @@ class DT_with_GNB:
         plt.legend()
         plt.show()
         
+        # Predict probabilities for the positive class
+        y_scores = dt_model.predict_proba(X_test)[:, 1]
+        #y_scores = dt_model.predict_proba(X_test)
+        
+        # Compute ROC curve and AUC
+        fpr, tpr, thresholds = roc_curve(y_test, y_scores, pos_label=1)
+        roc_auc = auc(fpr, tpr)
+        
+        # Plot ROC curve
+        plt.figure()
+        plt.plot(fpr, tpr, color='blue', label=f'ROC curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='gray', linestyle='--', label='Random Guess')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('DT Receiver Operating Characteristic (ROC) Curve')
+        plt.legend(loc='lower right')
+        plt.show()
+
+        y_score = dt_model.predict_proba(X_test)
+        try:
+            roc_auc = roc_auc_score(y_test, y_score, multi_class='ovr')
+        except:
+            roc_auc = 999
+        print(f"DT ROC AUC Score: {roc_auc:.2f}", file=file)
+
         # Gaussian Naive Bayes Classifier
         # data does not follow gaussian distribution
         start_time = time.time()
@@ -408,7 +433,28 @@ class DT_with_GNB:
 
         # Then print the F1 score to the output file
         print(f"Average GNB F1 score during cross-validation: {np.mean(fOne)}", file=file)
-    
+  
+        # Predict probabilities for the positive class
+        y_scores = gnb_model.predict_proba(X_test)[:, 1]
+            
+        # Compute ROC curve and AUC
+        fpr, tpr, thresholds = roc_curve(y_test, y_scores, pos_label=1)
+        roc_auc = auc(fpr, tpr)
+
+        # Plot ROC curve
+        plt.figure()
+        plt.plot(fpr, tpr, color='blue', label=f'ROC curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='gray', linestyle='--', label='Random Guess')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('GNB Receiver Operating Characteristic (ROC) Curve')
+        plt.legend(loc='lower right')
+        plt.show()
+
+        y_score = gnb_model.predict_proba(X_test)
+        roc_auc = roc_auc_score(y_test, y_score, multi_class='ovr')
+        print(f"GNB ROC AUC Score: {roc_auc:.2f}", file=file)
+
         num_columns = X_train.shape[1]
         print(f"Number of columns in X_train: {num_columns}", file=file)
         num_columns = X_train.shape[0]
@@ -425,9 +471,38 @@ class DT_with_GNB:
         gnb_performance = classification_report(y_test, gnb_predictions, zero_division=1.0)
         print(f"\nGNB Classification performance: \n {gnb_performance}", file=file)
         
+        # Define base models and meta-classifier
+        base_models = [
+            ('dt', DecisionTreeClassifier()),
+            ('gnb', GaussianNB())
+            ]
+        
+        # Combine DT with GNB using StackingClassifier and default final estimator
+        meta_classifier = LogisticRegression(max_iter=500, solver="saga", tol=1e-2)
+        
+        # Define hyperparameter grid
+        param_grid = {
+            'dt__criterion': ['gini', 'entropy', 'log_loss'],
+            'dt__max_depth': [None, 10, 20, 30],
+            'dt__min_samples_split': [2, 5, 10],
+            'dt__min_samples_leaf': [1, 2, 4],
+            'gnb__var_smoothing': [1e-9, 1e-8, 1e-7, 1e-6, 1e-5],
+            'final_estimator__C': [0.1, 1, 10]
+            }
+        
+        optimal_params = {
+            'dt__criterion': ['gini'],       
+            'dt__max_depth': [None],
+            'dt__min_samples_split': [2],
+            'dt__min_samples_leaf': [1],
+            'gnb__var_smoothing': [1e-9],
+            'final_estimator__C': [1]
+            }
+                                   
+       
         # Combine using VotingClassifier
         start_time = time.time()
-        voting_clf = VotingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], voting='soft')
+        voting_clf = VotingClassifier(estimators=base_models, voting='soft')
         votingscore = voting_clf.fit(X_train, y_train)
         end_time = time.time()
         
@@ -441,12 +516,12 @@ class DT_with_GNB:
         
         voting_clf_classification = classification_report(y_test, y_pred_voting, zero_division=1.0)
         print(f"\nVoting Classification Report: \n {voting_clf_classification}", file=file)
-        voting_clf_cm = confusion_matrix(y_test, y_pred_voting)
-        print(f"\nVoting Classifier Confusion Matrix: \n {voting_clf_cm}", file=file)
         
         # Combine DT with GNB using StackingClassifier and default final estimator
         start_time = time.time()
-        stacking_clf = StackingClassifier(estimators=[('dt', dt_model), ('gnb', gnb_model)], final_estimator=LogisticRegression())
+        stacking_clf = StackingClassifier(estimators=base_models, final_estimator=meta_classifier)
+        stacking_clf = GridSearchCV(estimator=stacking_clf, param_grid=optimal_params, cv=3, scoring='accuracy')
+        #stacking_clf = GridSearchCV(estimator=stacking_clf, param_grid=optimal_params, cv=3, scoring='accuracy')
         stacking_clf.fit(X_train, y_train).score(X_test, y_test)
         end_time = time.time()
         print(f"DT with GNB Stacking Classifier Execution time: {end_time - start_time:.6f} seconds", file=file)
@@ -615,17 +690,19 @@ class Data_Analysis:
                     #add constant to predictor variables
                     x = sm.add_constant(x)
                     #fit linear regression model
-                    model = sm.OLS(y, x).fit()
+                    model = sm.OLS(y, x)
+                    results = model.fit(cov_type='HC3')
                     #view model summary
-                    ols_results = model.summary()
+                    ols_results = results.summary()
                     print(f"\nOLS Summary for source and: {name}\n {ols_results}", file=file)
                     x = length
                     #add constant to predictor variables
                     x = sm.add_constant(x)
                     #fit linear regression model
-                    model = sm.OLS(y, x).fit()
+                    model = sm.OLS(y, x)
+                    results = model.fit(cov_type='HC3')
                     #view model summary
-                    ols_results = model.summary()
+                    ols_results = results.summary()
                     print(f"\nOLS Summary for length and: {name}\n {ols_results}", file=file)
                     i = i+1
                 elif (i == index):
@@ -648,7 +725,7 @@ def main():
     try:
         data_results, analysis_file = feature_selection.open_file()
         data = data_results
-        file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/output.txt", "a")
+        file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/rfecv_unscaled_uncompined_output.txt", "a")
         print(f"Data under analysis: {analysis_file}", file=file)
         features, selected_features_names, y_pred_rfecv = feature_selection.extract_features(data, file)
         with open('C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/rfecv_unscaled_feartures_output.txt', 'w') as feature_file:
@@ -725,9 +802,10 @@ def main():
             #add constant to predictor variables
             x = sm.add_constant(x)
             #fit linear regression model
-            model = sm.OLS(y, x).fit()
+            model = sm.OLS(y, x)
+            results = model.fit(cov_type='HC3')
             #view model summary
-            ols_results = model.summary()
+            ols_results = results.summary()
             print(f"\nOLS Summary: \n {ols_results}", file=file)
 
         
