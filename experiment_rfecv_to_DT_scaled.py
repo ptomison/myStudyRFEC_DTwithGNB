@@ -25,10 +25,10 @@ from sklearn.ensemble import StackingClassifier, VotingClassifier #, RandomFores
 from sklearn.linear_model import LogisticRegression #, LinearRegression, 
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.preprocessing import StandardScaler, LabelEncoder, TargetEncoder
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, f1_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, f1_score, roc_curve, auc, roc_auc_score
 from sklearn.naive_bayes import GaussianNB #, CategoricalNB
 from yellowbrick.features import FeatureImportances
-from scipy.stats import f_oneway, ttest_ind, mannwhitneyu, wilcoxon, kruskal, chi2_contingency
+from scipy.stats import f_oneway, ttest_ind, mannwhitneyu, wilcoxon, kruskal
 import statsmodels.api as sm
 
 class RFECV_EXPERIMENT:
@@ -190,9 +190,10 @@ class RFECV_EXPERIMENT:
         print(f"\nRFECV Prediction: {y_pred_rfecv}", file=file)
         
         # Plot the RFECV feature data for visualization
-        print('Optimal number of features :', rfecv.n_features_)
-        print('Best features :', X.columns[rfecv.support_])
-        print('Original features :', X.columns)
+        print(f"Optimal number of features: {rfecv.n_features_}", file=file)
+        print(f"Best features: {X.columns[rfecv.support_]}", file=file)
+        print(f"Original features: {X.columns}", file=file)
+        
         plt.figure()
         plt.xlabel("Number of features selected")
         plt.ylabel("Cross validation score std test score")
@@ -246,13 +247,19 @@ class RFECV_EXPERIMENT:
         print(f"KF Cross-validation scores: {scores}", file=file)
         print(f"KF Mean accuracy: {scores.mean():.4f}", file=file)
         print(f"KF RFECV ranking: {rfecv.ranking_}", file=file)
+       
+        # Generate and display the RFECV confusion matrix
+        cm = confusion_matrix(y, y_pred_rfecv)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=rfecv.classes_)
+        disp.plot(cmap='Oranges')
+        print(f"\nRFECV Confusion matrix: {cm}", file=file)
+
+        print("Evaluating the RFECV Features input into the Decision Tree Model")
         
-        print("Evaluating the Decision Tree Model")
-        
-        # Transform the dataset to include only selected features
+        # Transform the dataset to include only selected features as input into DT classifier
         X_selected = rfecv.transform(X)
         
-        # Split the data for the RF model 
+        # Split the data for the DT model 
         X_train, X_test, y_train, y_test = train_test_split(X_selected, y, test_size=0.2, stratify=y)
         
         start_time = time.time()
@@ -261,11 +268,10 @@ class RFECV_EXPERIMENT:
         
         print(f"DT Model Execution time: {end_time - start_time:.6f} seconds", file=file)
         
-        
         # Plot the decision tree
-        #plt.figure(figsize=(10, 6))
-        #plot_tree(dt_model, filled=True)
-        #plt.show()  
+        plt.figure(figsize=(10, 6))
+        plot_tree(dt_model, filled=True)
+        plt.show()  
         
         dt_predictions = dt_model.predict(X_test)
         
@@ -277,6 +283,12 @@ class RFECV_EXPERIMENT:
         disp.plot(cmap=plt.cm.Blues)
         plt.show()
         
+        # Generate confusion matrix
+        cm = confusion_matrix(y_test, dt_predictions)
+
+        # Display confusion matrix
+        print(f"\nDT Confusion Matrix: {cm}", file=file)
+    
         accuracy = accuracy_score(y_test, y_pred_dt)
         precision = precision_score(y_test, y_pred_dt, average='macro', zero_division=1.0)
         recall = recall_score(y_test, y_pred_dt, average='macro')
@@ -322,6 +334,27 @@ class RFECV_EXPERIMENT:
         plt.ylabel("Importance")
         plt.xticks(range(X_selected.shape[1]), np.array(X.columns)[indices], rotation=90, size=12)
         plt.show()
+
+        # Predict probabilities for the positive class
+        y_scores = dt_model.predict_proba(X_test)[:, 1]
+        
+        # Compute ROC curve and AUC
+        fpr, tpr, thresholds = roc_curve(y_test, y_scores, pos_label=1)
+        roc_auc = auc(fpr, tpr)
+        
+        # Plot ROC curve
+        plt.figure()
+        plt.plot(fpr, tpr, color='blue', label=f'ROC curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='gray', linestyle='--', label='Random Guess')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('DT Receiver Operating Characteristic (ROC) Curve')
+        plt.legend(loc='lower right')
+        plt.show()
+        
+        y_score = dt_model.predict_proba(X_test)
+        roc_auc = roc_auc_score(y_test, y_score, multi_class='ovr')
+        print(f"DT ROC AUC Score: {roc_auc:.2f}", file=file)
         
         # Step 2: Train a binary decision tree for each class
         classifiers = {}
@@ -349,6 +382,7 @@ class RFECV_EXPERIMENT:
         accuracy = accuracy_score(y_test, final_predictions)
         print(f"Decision Tree Binary Classification Accuracy: {accuracy:.2f}", file=file)
 
+
         # Gaussian Naive Bayes Classifier
         start_time = time.time()
         gnb_model = GaussianNB()
@@ -361,6 +395,12 @@ class RFECV_EXPERIMENT:
         
         # Plot confusion matrix
         ConfusionMatrixDisplay.from_predictions(y_test, gnb_predictions)
+
+        # Generate confusion matrix
+        cm = confusion_matrix(y_test, gnb_predictions)
+
+        # Output the confusion matrix into the file
+        print(f"\nGNB Confusion Matrix: {cm}", file=file)
         
         # Predict probabilities
         y_proba = gnb_model.predict_proba(X_test)
@@ -386,6 +426,31 @@ class RFECV_EXPERIMENT:
 
         # Then print the F1 score to the output file
         print(f"\nAverage GNB F1 score during cross-validation: {np.mean(fOne)}", file=file)
+
+        # Generate and print the classification report
+        report = classification_report(y_test, gnb_predictions, zero_division=1.0)
+        print(f"GNB Classification report: {report}", file=file)
+        
+        # Predict probabilities for the positive class for the ROC and AOC analysis
+        y_scores = gnb_model.predict_proba(X_test)[:, 1]
+            
+        # Compute ROC curve and AUC
+        fpr, tpr, thresholds = roc_curve(y_test, y_scores, pos_label=1)
+        roc_auc = auc(fpr, tpr)
+
+        # Plot ROC curve
+        plt.figure()
+        plt.plot(fpr, tpr, color='blue', label=f'ROC curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='gray', linestyle='--', label='Random Guess')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('GNB Receiver Operating Characteristic (ROC) Curve')
+        plt.legend(loc='lower right')
+        plt.show()
+    
+        y_score = gnb_model.predict_proba(X_test)
+        roc_auc = roc_auc_score(y_test, y_score, multi_class='ovr')
+        print(f"GNB ROC AUC Score: {roc_auc:.2f}", file=file)
     
         num_columns = X_train.shape[1]
         print(f"Number of columns in X_train: {num_columns}", file=file)
@@ -420,6 +485,7 @@ class RFECV_EXPERIMENT:
         
         print(f"\nDT and GNB Voting Classifier Execution time: {end_time - start_time:.6f} seconds", file=file)
         
+        # get the truth lables from the Voting classifier
         voting_predict = votingscore.predict(X_test)
         print((f" {voting_predict} "), file=file)
         
@@ -429,9 +495,29 @@ class RFECV_EXPERIMENT:
         
         voting_clf_classification = classification_report(y_test, y_pred_voting, zero_division=1.0)
         print(f"\nVoting Classification Report: \n {voting_clf_classification}", file=file)
-        voting_clf_cm = confusion_matrix(y_test, y_pred_voting)
-        print(f"\nVoting Classifier Confusion Matrix: \n {voting_clf_cm}", file=file)
         
+        # Step 5: Calculate ROC AUC score
+        y_score = votingscore.predict_proba(X_test)
+        roc_auc = roc_auc_score(y_test, y_score, multi_class='ovr')
+        print(f"Voting Classifer DT with GNB ROC AUC Score: {roc_auc:.2f}", file=file)
+        
+        # Predict probabilities for the positive class for the ROC and AOC analysis
+        y_scores = gnb_model.predict_proba(X_test)[:, 1]
+            
+        # Compute ROC curve and AUC
+        fpr, tpr, thresholds = roc_curve(y_test, y_scores, pos_label=1)
+        roc_auc = auc(fpr, tpr)
+
+        # Plot ROC curve
+        plt.figure()
+        plt.plot(fpr, tpr, color='blue', label=f'ROC curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='gray', linestyle='--', label='Random Guess')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Voting Classifier Receiver Operating Characteristic (ROC) Curve')
+        plt.legend(loc='lower right')
+        plt.show()
+    
         # Define hyperparameter grid
         #param_grid = {
         #   'dt__criterion': ['gini', 'entropy', 'log_loss'],
@@ -468,13 +554,6 @@ class RFECV_EXPERIMENT:
         print(f"\nStacking Classifier Mean CV Accuracy: {cv_scores.mean():.4f}", file=file)
         print(f"\nStacking Classifier STD Cross-Validation Accuracy: {cv_scores.std():.4f}", file=file)
 
-        #feature_importances = stacking_clf.named_estimators_['dt'].feature_importances_
-        #plt.barh(feature_names, feature_importances)
-        #plt.xlabel("Feature Importance")
-        #plt.ylabel("Features")
-        #plt.title("Feature Importance for Deciscion Tree Classifier")
-        #plt.show()
-
         # Evaluate performance
         y_pred_stacking = stacking_clf.predict(X_test)
         print("\nStacking Classifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred_stacking), file=file)
@@ -482,16 +561,38 @@ class RFECV_EXPERIMENT:
        
         # Retrieve the number of unrelated class categories
         clf_num_omt_classes = len(stacking_clf.classes_)
-        print(f"Stacking Classifier DT with GNB  Number of unrelated class categories: \n {clf_num_omt_classes}", file=file)
+        print(f"Stacking Classifier DT with GNB  Number of unrelated class categories: {clf_num_omt_classes}", file=file)
         
         # Retrieve the number of class categories
         clf_num_classes = stacking_clf.classes_
-        print(f"Stacking Classifier DT with GNB Number of class categories: {clf_num_classes}", file=file)
+        print(f"\nStacking Classifier DT with GNB Number of class categories: {clf_num_classes}", file=file)
         
         # Detailed classification report
         stacking_clf_performance = classification_report(y_test, y_pred_stacking, zero_division=1.0)
-        print(f"\nStacking Classification  Report: \n{stacking_clf_performance}", file=file)
+        print(f"\nStacking Classification Report: \n{stacking_clf_performance}", file=file)
         
+        # Step 5: Calculate ROC AUC score
+        y_score = stacking_clf.predict_proba(X_test)
+        roc_auc = roc_auc_score(y_test, y_score, multi_class='ovr')
+        print(f"Stacking Classifer DT with GNB ROC AUC Score: {roc_auc:.2f}", file=file)
+        
+        # Predict probabilities for the positive class for the ROC and AOC analysis
+        y_scores = gnb_model.predict_proba(X_test)[:, 1]
+            
+        # Compute ROC curve and AUC
+        fpr, tpr, thresholds = roc_curve(y_test, y_scores, pos_label=1)
+        roc_auc = auc(fpr, tpr)
+
+        # Plot ROC curve
+        plt.figure()
+        plt.plot(fpr, tpr, color='blue', label=f'ROC curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='gray', linestyle='--', label='Random Guess')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Stacking Classifier Receiver Operating Characteristic (ROC) Curve')
+        plt.legend(loc='lower right')
+        plt.show()
+    
         return X_selected, selected_features_names, y_pred_rfecv, dt_predictions, gnb_predictions, y_pred_voting, y_pred_stacking, X_test
     
     def stop_all(self, file):
@@ -519,8 +620,7 @@ class Data_Analysis:
                     data = data_scaled[column]
                     name = selected_features_names[i]
                     f_statistic, p_value = f_oneway(source, data,features)
-                    print(f"F-statistic for : {name}, {f_statistic}", file=file)
-                    print(f"P-value: {p_value:.6f}", file=file)
+                    print(f"F-statistic for {name}, {f_statistic}, P-value: {p_value:.6f}", file=file)
                     # Interpretation
                     if p_value < 0.05:
                         print("Significant differences exist between the groups.", file=file)
@@ -587,7 +687,7 @@ class Data_Analysis:
                     features = feature[column]
                     name = selected_features_names[i]
                     t_stat, p_value = ttest_ind(source,features)
-                    print(f"T-statistic for Source and name: {name}, {t_stat}, P-value: {p_value}", file=file)
+                    print(f"T-statistic for Source and {name}, T-Stat: {t_stat}, P-value: {p_value}", file=file)
                     # Interpretation
                     if p_value < 0.05:
                         print("Significant differences exist between the groups.", file=file)
@@ -596,14 +696,14 @@ class Data_Analysis:
                     t_stat = 0
                     p_value = 0
                     t_stat, p_value = ttest_ind(length,features)
-                    print(f"T-statistic for length and name: {name}, {t_stat}, P-value: {p_value:.6f}", file=file)
+                    print(f"T-statistic for length and {name}, T-Stat: {t_stat}, P-value: {p_value:.6f}", file=file)
                     # Interpretation
                     if p_value < 0.05:
                         print("Significant differences exist between the groups.", file=file)
                     else:
                         print("No significant differences between the groups.", file=file)
                     stat, p = mannwhitneyu(source, features, alternative='two-sided')
-                    print(f"Mann-Whitney U Test Statistic for source and name: {stat}, p-value: {p:.6f}", file=file) 
+                    print(f"Mann-Whitney U Test Statistic for source and {name}, T-Stat: {stat}, p-value: {p:.6f}", file=file) 
                     i = i+1
                     t_stat = 0
                     p_value = 0
@@ -615,7 +715,19 @@ class Data_Analysis:
             print("No multiple Features identified therefore going to use one feature identified", file=file)
     
     
-    def tTest(self, data, feature, file):
+    def t_TestAnd_WilcoxTest(self, item, data, feature, file):
+        if (item == 0):
+             data = data.Source_address
+        elif (item == 1):
+            data = data.Destination_address
+        elif (item == 2):
+            data = data.protocol_converted
+        elif (item == 3):
+             data = data.info_converted
+                
+        print("\nTwo-group t-test for {item}", file=file)
+        stat, p = wilcoxon(data, feature)
+        print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}", file=file)
         t_stat, p_value = ttest_ind(data,feature)
         print(f"T-statistic: {t_stat}, P-value: {p_value:.6f}", file=file)
         if p_value < 0.05:
@@ -638,27 +750,82 @@ class Data_Analysis:
                     y = feature[column]
                     #x = data[column]
                     x = source
+                    data = pd.DataFrame({'x': x, 'y': y})
                     name = selected_features_names[i]
                     #add constant to predictor variables
-                    x = sm.add_constant(x)
+                    x = sm.add_constant(data['x'])
                     #fit linear regression model
-                    model = sm.OLS(y, x).fit()
+                    model = sm.OLS(data['y'], x).fit()
                     #view model summary
                     ols_results = model.summary()
                     print(f"\nOLS Summary for source and : {name}\n {ols_results}", file=file)
+                    data['predicted'] = model.predict(x)
+                    #y_pred = model.predict(x)
+                    #print("OLS model predicted: ", y_pred)
+                    # Plot the data and the regression line
+                    plt.figure(figsize=(8, 6))
+                    plt.scatter(data['x'], data['y'], label='Observed Data', color='blue', alpha=0.6)
+                    plt.plot(data['x'], data['predicted'], label='Regression Line', color='red', linewidth=2)
+                    plt.xlabel('X')
+                    plt.ylabel('Y')
+                    plt.title('Source Address OLS Regression: Observed vs Predicted')
+                    plt.legend()
+                    plt.grid(True)
+                    plt.show()
+                    # Now repeat the linear regression with the Length variable
                     x = length
+                    data = pd.DataFrame({'x': x, 'y': y})
                     #add constant to predictor variables
-                    x = sm.add_constant(x)
+                    x = sm.add_constant(data['x'])
                     #fit linear regression model
-                    model = sm.OLS(y, x).fit()
+                    model = sm.OLS(data['y'], x).fit()
                     #view model summary
                     ols_results = model.summary()
                     print(f"\nOLS Summary for length and : {name}\n {ols_results}", file=file)
+                    data['predicted'] = model.predict(x)
+                    #y_pred = model.predict(x)
+                    #print("OLS model predicted: ", y_pred)
+                    # Plot the data and the regression line
+                    plt.figure(figsize=(8, 6))
+                    plt.scatter(data['x'], data['y'], label='Observed Data', color='blue', alpha=0.6)
+                    plt.plot(data['x'], data['predicted'], label='Regression Line', color='red', linewidth=2)
+                    plt.xlabel('X')
+                    plt.ylabel('Y')
+                    plt.title('Length OLS Regression: Observed vs Predicted')
+                    plt.legend()
+                    plt.grid(True)
+                    plt.show()
                     i = i+1
                 elif (i == index):
                     break
-        
-        
+    
+    def olsTest_SingleFeature(self, data, features, selected_features_names, file):
+        # Fit the ordinary least sqaure model
+         #define predictor and response variables
+        y = pd.DataFrame(features)
+        y.columns = selected_features_names
+        y = y.iloc[:, :1]
+        x = data['Source_address']
+        #add constant to predictor variables
+        x = sm.add_constant(x)
+        #fit linear regression model
+        model = sm.OLS(y, x).fit()
+        #view model summary
+        ols_results = model.summary()
+        print(f"\nOLS Summary: \n {ols_results}", file=file)
+        y_pred = model.predict(x)
+        # Plotting
+        plt.scatter(x.iloc[:,:1], y, label='Observed Data', color='blue', alpha=0.6)
+        plt.plot(x, y_pred, label='Regression Line', color='red', linewidth=2)
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Length OLS Regression: Observed vs Predicted')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+                
+           
+       
 def main():
     print("Run the script")
     features = []
@@ -675,88 +842,51 @@ def main():
     try:
         data_results, analysis_file = feature_selection.open_file()
         data = data_results
-        file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/output_combined_updated.txt", "a")
+        file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/rfecv_output_dt_withgnbcombined.txt", "a")
+        # for debuging
+        #file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/output.txt", "a")
         print(f"Data under analysis: {analysis_file}", file=file)
         data_scaled, target_data = feature_selection.standardize_data(data)
         features, selected_features_names, y_pred_rfecv, dt_predictions, gnb_predictions, y_pred_voting, y_pred_stacking, testing_data = feature_selection.extract_features(data_scaled, file)
-        with open('C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/Combined_feartures_output.txt', 'w') as feature_file:
+        with open('C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/Combined_feartures_output.txt', 'a') as feature_file:
             for item in features:
                 feature_file.write(f"{item}\n")
         feature_file.close()
         
-        data_analysis.oneAnova_MFeatures(data, features, selected_features_names, file)
-        data_analysis.tTest_NFeatures(data, features, selected_features_names, file)
+        data_analysis.oneAnova_MFeatures(data_scaled, features, selected_features_names, file)
+        data_analysis.tTest_NFeatures(data_scaled, features, selected_features_names, file)
         
-        # see if the models predicitions has statstical significance
+        # see if the models predicitions has statstical significance following normality
         print("One ANOVA Statistical Significance for RFECV features identified", file=file)
-        data_analysis.oneAnova(data, y_pred_rfecv, file)
+        data_analysis.oneAnova(data_scaled, y_pred_rfecv, file)
         print("One ANOVA Statistical Significance for Decision Tree features identified", file=file)
-        data_analysis.oneAnova(data, dt_predictions, file)
+        data_analysis.oneAnova(data_scaled, dt_predictions, file)
         print("One ANOVA Statistical Significance for GNB features identified", file=file)
-        data_analysis.oneAnova(data, gnb_predictions, file)
+        data_analysis.oneAnova(data_scaled, gnb_predictions, file)
         print("One ANOVA Statistical Significance for DT with GNB Voting stacking features identified", file=file)
-        data_analysis.oneAnova(data, y_pred_voting, file)
+        data_analysis.oneAnova(data_scaled, y_pred_voting, file)
         print("One ANOVA Statistical Significance for DT with GNB Combined features identified", file=file)
-        data_analysis.oneAnova(data, y_pred_stacking, file)
+        data_analysis.oneAnova(data_scaled, y_pred_stacking, file)
         
-        print("\nTwo-group t-test for Source Address and RFECV features identified", file=file)
-        data_analysis.tTest(data.Source_address, y_pred_rfecv, file )
-        stat, p = wilcoxon(data.Source_address, y_pred_rfecv)
-        print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}", file=file)
-        
-        print("\nTwo-group t-test for Destination Address and RFECV features identified", file=file)
-        data_analysis.tTest(data.Destination_address, y_pred_rfecv, file )
-        stat, p = wilcoxon(data.Destination_address, y_pred_rfecv)
-        print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}", file=file)
-       
-        print("\nTwo-group t-test for Protocol and RFECV features identified", file=file)
-        data_analysis.tTest(data.protocol_converted, y_pred_rfecv, file )
-        stat, p = wilcoxon(data.protocol_converted, y_pred_rfecv)
-        print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}", file =file)
-       
-        print("\nTwo-group t-test for Length and RFECV features identified", file=file)
-        data_analysis.tTest(data.Length, y_pred_rfecv, file )
-        stat, p = wilcoxon(data.Length, y_pred_rfecv)
-        print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}", file=file)
-       
+        for i in range(4):
+            data_analysis.t_TestAnd_WilcoxTest(i, data_scaled, y_pred_rfecv, file) 
+
         print("\nTwo-group t-test for Source Address and DT with GNB features identified", file=file)
-        data_analysis.tTest(data.Source_address, y_pred_stacking, file )
-        #stat, p = wilcoxon(testing_data[1:], y_pred_stacking)
-        #print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}")
-       
-        print("\nTwo-group t-test for Destination Address and DT with GNB features identified", file=file)
-        data_analysis.tTest(data.Destination_address, y_pred_stacking, file )
-        #stat, p = wilcoxon(data.Destination_address, y_pred_stacking)
-        #print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}")
-       
-        print("\nTwo-group t-test for Protocol and DT with GNB features identified", file=file)
-        data_analysis.tTest(data.protocol_converted, y_pred_stacking, file )
-        #stat, p = wilcoxon(data.protocol_converted, y_pred_stacking)
-        #print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}")
-       
-        print("\nTwo-group t-test for Length and DT with GNB features identified", file=file)
-        data_analysis.tTest(data.Length, y_pred_stacking, file )
-        #stat, p = wilcoxon(data.Length, y_pred_stacking)
-        #print(f"Wilcox Signed Rank Statistical Results: {stat}, p-value: {p:.6f}")
-       
+        t_stat, p_value = ttest_ind(testing_data[:, 0], y_pred_stacking)
+        if p_value < 0.05:
+              print("Significant differences exist between the groups.", file=file)
+        else:
+              print("No significant differences between the groups.", file=file)
+        stat, p = wilcoxon(testing_data[:, 0], y_pred_stacking)
+        print(f"Wilcox T-statistic: {t_stat}, P-value: {p_value:.6f}", file=file)
+        
         index = len(selected_features_names)
         if (index > 1):
             data_analysis.olsTest_NFeature(data_scaled, features, selected_features_names, file)
         else:
-            # Fit the ordinary least sqaure model
-            #define predictor and response variables
-            y = pd.DataFrame(features)
-            y = y.iloc[:, :1]
-            x = data_scaled['Source_address']
-            #add constant to predictor variables
-            x = sm.add_constant(x)
-            #fit linear regression model
-            model = sm.OLS(y, x).fit()
-            #view model summary
-            ols_results = model.summary()
-            print(f"\nOLS Summary: \n {ols_results}", file=file)
-
-       
+            data_analysis.olsTest_SingleFeature(data_scaled, features, selected_features_names, file)
+           
+        
         feature_selection.stop_all(file)
         file.close()
         
@@ -766,4 +896,3 @@ def main():
 if __name__ == '__main__':
 
     main()
-
