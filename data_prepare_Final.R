@@ -61,9 +61,9 @@ getwd()
 
 output <- gsub(".csv", "_convert1.csv", test)
 #   read in dataset
-test1 <- read.csv(test, header = TRUE, na.strings = "")
-head(test1)
-row <- nrow(test1)
+test <- read.csv(test, header = TRUE, na.strings = "")
+head(test)
+row <- nrow(test)
 
 time = test$Time
 address <- test$Source
@@ -136,16 +136,16 @@ destination <- gsub("\\.", "", destination )
 Destination_address <- gsub("\\:", "", destination )
 
 protocol_converted = test$Protocol
-protocol_converted <- gsub("\\DNS", 1001, protocol_converted )
-protocol_converted <- gsub("\\TCP", 2001, protocol_converted )
-protocol_converted <- gsub("\\ARP", 3002, protocol_converted )
-protocol_converted <- gsub("\\OpenFlow", 4004, protocol_converted )
-protocol_converted <- gsub("\\M1", 5005, protocol_converted )
-protocol_converted <- gsub("\\STP", 6006, protocol_converted )
-protocol_converted <- gsub("\\DHCP", 7007, protocol_converted )
-protocol_converted <- gsub("\\ICMP", 8008, protocol_converted )
-protocol_converted <- gsub("\\N1", 9009, protocol_converted )
-protocol_converted <- gsub("\\IGMPv3", 1010, protocol_converted )
+protocol_converted <- gsub("\\DNS", 1, protocol_converted )
+protocol_converted <- gsub("\\TCP", 2, protocol_converted )
+protocol_converted <- gsub("\\ARP", 3, protocol_converted )
+protocol_converted <- gsub("\\OpenFlow", 4, protocol_converted )
+protocol_converted <- gsub("\\M1", 5, protocol_converted )
+protocol_converted <- gsub("\\STP", 6, protocol_converted )
+protocol_converted <- gsub("\\DHCP", 7, protocol_converted )
+protocol_converted <- gsub("\\ICMP", 8, protocol_converted )
+protocol_converted <- gsub("\\N1", 9, protocol_converted )
+protocol_converted <- gsub("\\IGMPv3", 1, protocol_converted )
 
 # Extract the TCP flags from the info data and the Openflow information
 # Convert the values to numeric data
@@ -321,7 +321,86 @@ for (i in 1:length(test$Info)) {
      Label[i] <- 0
 }
 
+info_converted <- c()
+i <- 0
+for (i in 1:length(test$Info)) {
+  if (ack_count[i] == 1) {
+    info_converted <- c(info_converted, ack_count[i])  # Append matching elements to the result
+  } 
+  else if (rst_ack_count[i] == 1) {
+    info_converted <- c(info_converted, 2)
+  }
+  else if (syn_count[i] == 1) {
+    info_converted <- c(info_converted, 3)
+  }
+  else if (psh_count[i] == 1) {
+    info_converted <- c(info_converted, 4)
+  }
+  else if (rst_count[i] == 1) {
+    info_converted <- c(info_converted, 5)
+  }
+  else if (tcp_dup_ack_count[i] == 1) {
+    info_converted <- c(info_converted, 6)
+  }
+  else if (opt_hello_count[i] == 1) {
+    info_converted <- c(info_converted, 7)
+  }
+  else if (opt_pkt_in_count[i] == 1) {
+    info_converted <- c(info_converted, 8)
+  }
+  else if (opt_pkt_out_count[i] == 1) {
+    info_converted <- c(info_converted, 9)
+  }
+  else if (opt_flow_mod_count[i] == 1) {
+    info_converted <- c(info_converted, 10)
+  }
+  else if (opt_port_status_count[i] == 1) {
+    info_converted <- c(info_converted, 11)
+  }
+  else if (opt_feat_request_count[i] == 1) {
+    info_converted <- c(info_converted, 12)
+  }
+  else if (opt_set_cfg_count[i] == 1) {
+    info_converted <- c(info_converted, 13)
+  }
+  else if (opt_echo_req_count[i] == 1) {
+    info_converted <- c(info_converted, 14)
+  }
+  else if (opt_echo_rep_count[i] == 1) {
+    info_converted <- c(info_converted, 15)
+  }
+  else if (fin_ack_count[i] == 1) {
+    info_converted <- c(info_converted, 16)
+  }
+  else if (syn_ack_count[i] == 1) {
+    info_converted <- c(info_converted, 17)
+  }
+  else if (conf_root_count[i] == 1) {
+    info_converted <- c(info_converted, 18)
+  }
+  else if (echo_ping_rep_count[i] == 1) {
+    info_converted <- c(info_converted, 19)
+  }
+  else if (info_converted20[i] == 1) {
+    info_converted <- c(info_converted, 20)
+  }
+  else if (conf_tc_root_count[i] == 1) {
+    info_converted <- c(info_converted, 21)
+  }
+  else if (std_query_count[i] == 1) {
+    info_converted <- c(info_converted, 22)
+  }
+  else if (tcp_retrans_count[i] == 1) {
+    info_converted <- c(info_converted, 23)
+  }
+  else if (tcp_fst_retrans_count[i] == 1) {
+    info_converted <- c(info_converted, 24)
+  }
+  else
+    info_converted <- c(info_converted, 999)
+}
+
 # write out to a new csv file
-convert_data <- data.frame(number, time, Source_address, Destination_address, protocol_converted, Length, ack_count, syn_count, rst_ack_count, psh_count, rst_count, tcp_dup_ack_count, opt_hello_count, opt_pkt_in_count, opt_pkt_out_count, opt_flow_mod_count, opt_port_status_count, opt_feat_request_count, opt_set_cfg_count, opt_echo_req_count, opt_echo_rep_count, fin_ack_count, syn_ack_count, echo_ping_req_count, echo_ping_rep_count, conf_tc_root_count, std_query_count, Label)
+convert_data <- data.frame(number, time, Source_address, Destination_address, protocol_converted, Length, info_converted, ack_count, syn_count, rst_ack_count, psh_count, rst_count, tcp_dup_ack_count, opt_hello_count, opt_pkt_in_count, opt_pkt_out_count, opt_flow_mod_count, opt_port_status_count, opt_feat_request_count, opt_set_cfg_count, opt_echo_req_count, opt_echo_rep_count, fin_ack_count, syn_ack_count, echo_ping_req_count, echo_ping_rep_count, conf_tc_root_count, std_query_count, Label)
 write.csv(convert_data, output)
 print("Done with data preprocessing")
