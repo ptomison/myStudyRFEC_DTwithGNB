@@ -17,7 +17,11 @@ import numpy as np
 import seaborn as sns
 #import shap
 import pingouin as pg
-import statistics
+import statistics as statistic
+
+# Set global font properties
+plt.rcParams['font.family'] = 'sans-serif' 
+plt.rcParams['font.size'] = 14    
 
 
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split, cross_val_score, GridSearchCV, RandomizedSearchCV
@@ -37,7 +41,7 @@ import statsmodels.api as sm
 from factor_analyzer import FactorAnalyzer
 from sklearn.pipeline import Pipeline
 from statsmodels.stats.outliers_influence import variance_inflation_factor
-
+from sklearn.inspection import permutation_importance
 
 class RFECV_EXPERIMENT:
     
@@ -126,7 +130,7 @@ class RFECV_EXPERIMENT:
         dt_model = DecisionTreeClassifier(random_state=42)
        
         print("Making Data Classification Complete")
-   
+        y = pd.DataFrame(y)
         # Setup the cross_validation
         cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)  # Cross-validation
         kf = KFold(n_splits=10, shuffle=True, random_state=42)  # Cross-validation
@@ -177,7 +181,7 @@ class RFECV_EXPERIMENT:
         random_search.fit(X_train, y_train)
         
         # Best parameters and score
-        print("Best Parameters:", random_search.best_params_)
+        #print("Best Parameters:", random_search.best_params_)
         print("Best Score:", random_search.best_score_, file=file)
 
         # Evaluate on test data
@@ -185,6 +189,8 @@ class RFECV_EXPERIMENT:
         print("Test Accuracy:", test_score, file=file)
 
         rfecv_cv_scores = rfecv.cv_results_["mean_test_score"]
+        
+        print("RFECV CV Scores:", rfecv_cv_scores, file=file)
         
         random_cv_scores = random_search.cv_results_["mean_test_score"]
         # Perform paired t-test
@@ -255,7 +261,7 @@ class RFECV_EXPERIMENT:
         for feature, stats in anova_results.items():
             print(f"{feature}: One-way ANOVA F-Statistic = {stats['F-Statistic']:.4f}, P-Value = {stats['FP-Value']:.4e}", file=file)
 
-        # Display ANOVA results
+        # Display Kruskal-Wallis results
         for feature, stats in kruskal_results.items():
             print(f"{feature}: Kruskal H-Statistic = {stats['H-Statistic']:.4f}, P-Value = {stats['KP-Value']:.4e}", file=file)
 
@@ -326,7 +332,7 @@ class RFECV_EXPERIMENT:
         plt.ylabel('Score')
         plt.xticks(range(1, len(scores_cross) + 1))
         plt.legend()
-        plt.grid()
+        plt.grid(False)
         plt.show()
 
         # Step 6: Print results
@@ -345,9 +351,7 @@ class RFECV_EXPERIMENT:
         
         print(f"RFECV Number of selected features: {num_selected_features}", file=file)
         print(f"RFECV Number of omitted features: {num_omitted_features}", file=file)
-        print("RFECV Number of omitted features: ", num_omitted_features)
-        
-        
+                
         print(f"\nRFECV Prediction: {y_pred_rfecv}", file=file)
         print(f"\nRFECV Feature Prediction: {y_pred_rfecv_features}", file=file)
         
@@ -368,23 +372,37 @@ class RFECV_EXPERIMENT:
         
         # Perform the Kruskal-Wallis test
         stat, p_value = kruskal(precision, accuracy, recall, f1_scores, X_selected)
+        
+        print("Kruskal-Wallis of RFECV performance metrics and features selelected", file=file)
 
         # Display Kruskal-Wallis results
         for i in stat:
             h_stat = i
             print(f"Kruskal H-Statistic = {h_stat}", file=file)
-            print("Kruskal H-Statistic =, ", h_stat)
-
 
         for i in p_value:
             p_val = i
             print(f"Kruskal p_value = {p_val}", file=file)
-            print("Kruskal p_value =", p_val)
             # Interpretation
             if p_val < 0.05:
                 print("There is a statistically significant difference between the groups.", file=file)
             else:
                 print("No statistically significant difference between the groups.", file=file)
+
+        # Permutation importance
+        # perm_importance = permutation_importance(rfecv.estimator_, X_train, y_train, n_repeats=30, random_state=42)
+        # print(perm_importance.importances_mean)
+        # Step 3: Extract RFECV rankings
+        rfecv_rankings = rfecv.ranking_
+
+        # Step 4: Define another set of rankings (e.g., feature importances)
+        feature_importances = dt_model.fit(X, y).feature_importances_
+        importance_rankings = feature_importances.argsort().argsort() + 1  # Convert to rank format
+        # Step 5: Calculate Spearman correlation
+        correlation, p_value = spearmanr(rfecv_rankings, importance_rankings)
+
+        # Step 6: Output the results
+        print(f"Feature Ranking Spearman Correlation: {correlation} P-value: {p_value}", file=file)
         
         precision = precision_score(y_train, y_pred_rfecv_features, average='macro', zero_division=1.0)
         accuracy = accuracy_score(y_train, y_pred_rfecv_features)
@@ -422,7 +440,7 @@ class RFECV_EXPERIMENT:
         plt.ylabel("Cross-Validation Score (Accuracy)")
         plt.title("RFECV - Optimal Number of Features")
         plt.plot(range(1, len(rfecv.cv_results_['mean_test_score']) + 1), rfecv.cv_results_['mean_test_score'], marker='o')
-        plt.grid()
+        plt.grid(False)
         plt.show()
         
         # Plot feature rankings
@@ -456,11 +474,42 @@ class RFECV_EXPERIMENT:
         plt.show()
         
         # Generate and display the RFECV confusion matrix
-        cm_features = confusion_matrix(y_train, y_pred_rfecv_features)
+        cm_features = confusion_matrix(y_train, y_pred_rfecv_features, labels=np.unique(y_test))
         disp = ConfusionMatrixDisplay(confusion_matrix=cm_features, display_labels=rfecv.classes_)
         disp.plot(cmap='Purples')
         print(f"\nRFECV Feature Predicted Confusion matrix:\n {cm_features}", file=file)
-        
+ 
+        # Step 3: Calculate False Positive Rate (FPR) for each class
+        fpr_per_class = []
+        for i in range(len(cm_features)):
+            fp = sum(cm_features[:, i]) - cm_features[i, i]  # False Positives
+            tn = cm_features.sum() - (sum(cm_features[i, :]) + sum(cm_features[:, i]) - cm_features[i, i])  # True Negatives
+            fpr = fp / (fp + tn)
+            fpr_per_class.append(fpr)
+
+        # Step 4: Perform z-test
+        # Hypothesized mean FPR (e.g., 0.1)
+        hypothesized_mean = 0.1
+        sample_mean = np.mean(fpr_per_class)
+        sample_std = np.std(fpr_per_class, ddof=1) / np.sqrt(len(fpr_per_class))  # Standard error
+
+        # Z-score calculation
+        z_score = (sample_mean - hypothesized_mean) / sample_std
+
+        # P-value calculation
+        p_value = 2 * (1 - norm.cdf(abs(z_score)))
+
+        # Output results
+        print(f"FPR per class: {fpr_per_class}", file=file)
+        print(f"Sample mean FPR: {sample_mean}", file=file)
+        print(f"Z-score: {z_score} P-value: {p_value}",file=file)
+
+        # Interpretation
+        if p_value < 0.05:
+            print("Reject the null hypothesis: The FPR is significantly different from the hypothesized mean.", file=file)
+        else:
+            print("Fail to reject the null hypothesis: No significant difference in FPR.", file=file)
+
         # Calculate unrelated class creations (misclassifications)
         misclassification = cm_features.sum() - cm_features.diagonal().sum()
         print(f"RFECV Feature predicted Number of misclassifications: {misclassification} out of {cm_features.diagonal().sum()}", file=file)
@@ -535,7 +584,7 @@ class RFECV_EXPERIMENT:
         selected_features_OLS = X_test.columns[rfecv.support_]
         X_selected = X_test[selected_features_OLS]
 
-        print(f"\nOFS Selected Features: {list(selected_features_OLS)}")
+        print(f"\nRFECV OFS Selected Features: {list(selected_features_OLS)}", file=file)
 
         # Step 5: Fit an OLS model using statsmodels
         X_selected_with_const = sm.add_constant(X_selected)  # Add intercept
@@ -559,27 +608,76 @@ class RFECV_EXPERIMENT:
         plt.ylabel("Test Score")
         plt.title("RFECV Split Test Scores")
         plt.legend()
-        plt.grid()
+        plt.grid(False)
         plt.show()
         
         print("\nEvaluating irrelavent features in RFECV", file=file)
         # Add random noise features
         np.random.seed(42)
-
-        irrelevant_features = np.random.rand(X.shape[0], 5)  # Add 5 irrelevant features
-        X_with_noise = np.hstack((X, irrelevant_features))
+        
+        orignal_selected = rfecv.support_
+        original_ranking = rfecv.ranking_
+        
+        dt_model.fit(X, y)
+        dt_model_pred = dt_model.predict(X)
+        accuracy_before = accuracy_score(y, dt_model_pred)
+        
+        # Model performance after RFECV
+        X_selected = rfecv.transform(X)
+        dt_model.fit(X_selected, y)
+        y_pred_selected = dt_model.predict(X_selected)
+        accuracy_after = accuracy_score(y, y_pred_selected)
+        
+        print("RFECV irrelevant feature accuracy", accuracy_before, "and after", accuracy_after, file=file)
+        
+        # Plot the cross-validation scores
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(1, len(rfecv.cv_results_['mean_test_score']) + 1), 
+                 rfecv.cv_results_['mean_test_score'], marker='o')
+        plt.xlabel("Number of Features Selected")
+        plt.ylabel("Mean Cross-Validation Score")
+        plt.title("RFECV Cross-Validation Scores vs Number of Features")
+        plt.grid()
+        plt.show()
+        
+        X_with_noise = pd.DataFrame(X) # create the irrelevant and duplciate features
+        X_with_noise['Irrlevant'] = np.random.random(size=len(X)) # add in irrelevant data into the exiting dataset
+        X_with_noise['D_SourceIp'] = X['Source_address'] # duplicate on existing one
+        #X_with_noise = np.hstack((X, irrelevant_features))
 
         # Fit RFECV with irrelevant features
         rfecv_with_noise = RFECV(estimator=dt_model, step=1, cv=cv, scoring='accuracy')
-        rfecv_with_noise.fit(X_with_noise, y)
+        features_w_noise = rfecv_with_noise.fit_transform(X_with_noise, y)
 
+        after_selected = rfecv_with_noise.support_
+        after_ranking = rfecv_with_noise.ranking_
+
+        print("Features selected", orignal_selected, " after: ", after_selected, file=file)
+        print("Feature ranking:", original_ranking, " after:", after_ranking, file=file)
+        
+        selected_features = X_with_noise.columns[rfecv_with_noise.support_]
+        print("Selected Features:", selected_features, file=file)
+
+        # Step 5: Check if duplicate feature was removed
+        if 'D_SourceIp' not in selected_features:
+            print("Duplicate feature was removed.", file=file)
+        else:
+            print("Duplicate feature was retained.", file=file)
+            
+        # Step 5: Check if duplicate feature was removed
+        if 'Irrlevant' not in selected_features:
+            print("Irrlevant feature was removed.", file=file)
+        else:
+            print("Irrlevant feature was retained.", file=file)
+        
         scores_noise = rfecv_with_noise.score(X_with_noise, y)
-
-        scores_with_irrelevant = cross_val_score(dt_model, X, y, cv=cv, scoring='accuracy')
+ 
+        scores_with_irrelevant = cross_val_score(dt_model, X_with_noise, y, cv=cv, scoring='accuracy')
 
         # Remove irrelevant features and evaluate again
-        X_reduced = X.iloc[:, rfecv.support_]
-        scores_without_irrelevant = cross_val_score(dt_model, X_reduced, y, cv=cv, scoring='accuracy')        
+        X_selected = rfecv.transform(X_train)
+        
+        scores_without_irrelevant = cross_val_score(dt_model, X_selected, y_train, cv=cv, scoring='accuracy')        
         print(f"\nRFECV with Noise: Optimal number of features (with noise): {rfecv_with_noise.n_features_}", file=file)
         print(f"RFECV With Noise Best Selected features: {rfecv_with_noise.support_}", file=file)
         print(f"RFECV With Noise Cross-validation scores: {scores_noise}", file=file)
@@ -600,8 +698,21 @@ class RFECV_EXPERIMENT:
             else:
                 print("Irrelevant features had no impact on RFECV performance", file=file)
 
+        stat, p_value = wilcoxon(scores_without_irrelevant, scores_with_irrelevant)
+        print(f"Irrelevant Features Wilcox Signed Rank Statistical Results: {stat}, p-value: {p_value:.6f}", file=file)
+        if p_value < 0.05:
+              print("Significant differences exist between the groups.", file=file)
+        else:
+              print("No significant differences between the groups.", file=file)
+                
+        selected_features = rfecv_with_noise.support_
 
-        features_selected = pd.DataFrame(features, columns=selected_feature_names)
+        original_features = pd.DataFrame(X_with_noise).columns
+        selected_feature_names = original_features[selected_features]
+
+
+        # Transform the dataset to include only selected features as input into DT classifier
+        features_selected = pd.DataFrame(features_w_noise, columns=selected_feature_names)
         
         # Identify if duplicate features impaced RFECV performance
         correlation_matrix = features_selected.corr()
@@ -642,9 +753,9 @@ class RFECV_EXPERIMENT:
         
        
         # Transform the dataset to include only selected features as input into DT classifier
-        features_selected = pd.DataFrame(features, columns=selected_feature_names)
+        features_selected = pd.DataFrame(features_selected, columns=selected_feature_names)
         
-        # Identify if duplicate features impaced RFECV performance
+        # Identify if duplicate features impacted RFECV performance
         correlation_matrix = features_selected.corr()
         
         # Identify pairs of features with high correlation
@@ -667,6 +778,25 @@ class RFECV_EXPERIMENT:
             vif_data = 0
 
         print(f"RFECV Variance Inflation Factor:\n {vif_data}", file=file)
+        
+        corr_matrix = pd.DataFrame(X_with_noise).corr(method="spearman")
+
+        # Visualize the correlation matrix
+        sns.heatmap(corr_matrix, linewidths=0.5, annot=True, cmap='coolwarm', fmt=".2f")
+        plt.title("Spearman Correlation Matrix of RFECV Irreelvant Selected Features")
+        plt.show()
+
+        # Restore the value after irrelevant and duplicate test
+        selected_features = rfecv.support_
+
+        X_selected = rfecv.transform(X_test)
+        # Count duplicate features
+        original_features = pd.DataFrame(X_test).columns
+        selected_feature_names = original_features[selected_features]
+        
+        # Transform the dataset to include only selected features as input into DT classifier
+        X_selected = pd.DataFrame(X_selected, columns=selected_feature_names)
+        
         
         # Transform the dataset to include only selected features as input into DT classifier
         X_train_selected = rfecv.transform(X_train)
@@ -761,12 +891,15 @@ class RFECV_EXPERIMENT:
 
         # Display F1 scores for each class
         for i, score in enumerate(f1_scores):
-            print(f"Decision Tree F1 Score for class {i}: {f1_score}", file=file)
+            print(f"Decision Tree F1 Score for class {i}: {f1_scores}", file=file)
+
+        # Step 5a: Evaluate the RFECV model using KFold cross_val_score
+        dt_cv_scores = cross_val_score(dt_model, X, y, cv=cv, scoring='accuracy')
 
         print("\nDT Classifier Accuracy:", accuracy, file=file)
         print("DT Classifier Precision:", precision, file=file)
         print("DT Classifier Recall:", recall, file=file)
-        print("Decision Tree Classifier:", file=file)
+        print("Decision Tree Classifier:", np.mean(dt_cv_scores), file=file)
         print(f"DT Accuracy: {accuracy_score(y_test, dt_predictions):.4f}", file=file)
         
         dt_performance = classification_report(y_test, dt_predictions, zero_division=1.0)
@@ -829,7 +962,6 @@ class RFECV_EXPERIMENT:
             clf = DecisionTreeClassifier(random_state=42)
             clf.fit(X_train_selected, y_train_binary)
             classifiers[class_label] = clf
-
         
         # Step 3: Make predictions
         predictions = []
@@ -863,7 +995,7 @@ class RFECV_EXPERIMENT:
         plt.ylabel("Dependent Variable (y)")
         plt.title("Observed vs Regression Results")
         plt.legend()
-        plt.grid(True)
+        plt.grid(False)
         plt.show()
 
         # Gaussian Naive Bayes Classifier
@@ -996,7 +1128,7 @@ class RFECV_EXPERIMENT:
         plt.ylabel("Dependent Variable (y)")
         plt.title("Observed vs Regression Results")
         plt.legend()
-        plt.grid(True)
+        plt.grid(False)
         plt.show()
 
         # Define base models and meta-classifier
@@ -1123,7 +1255,7 @@ class RFECV_EXPERIMENT:
 
         # Evaluate the pipeline
         accuracy = pipeline.score(X_test, y_test)
-        print(f"RFECV DT and GNB Pipeline Test Accuracy: {accuracy:.2f}", file=file)
+        print(f"RFECV DT and GNB Pipeline Accuracy: {accuracy:.2f}", file=file)
 
         # Evaluate performance
         start_test = time.time()
@@ -1142,6 +1274,61 @@ class RFECV_EXPERIMENT:
         pipeline_performance = classification_report(y_test, y_pred_pipeline, zero_division=1.0)
         print(f"\nPipeline Classification Report: \n{pipeline_performance}", file=file)
        
+        # Compute confusion matrix
+        cm = confusion_matrix(y_test, y_pred_pipeline)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=pipeline.classes_)
+        disp.plot(cmap=plt.cm.Blues)
+
+        # Calculate unrelated class creations (misclassifications)
+        misclassifications = cm.sum() - cm.diagonal().sum()
+        print(f"Pipeline Number of misclassifications: {misclassifications} out of {cm.diagonal().sum()}", file=file)
+
+        # Compute False Positives for each class
+        false_positives = np.sum(cm, axis=0) - np.diag(cm)
+
+        print(f"Pipeline False Positives for each class:\n {false_positives}", file=file)
+        
+        # Calculate False Negatives for each class
+        false_negatives = np.sum(cm, axis=1) - np.diag(cm)
+
+        print(f"\nPipeline False Negatives for each class:\n {false_negatives}", file=file)
+        
+        true_postives = np.diag(cm)
+        
+        actual_totals = np.sum(cm, axis=1)  # Sum of rows
+        tpr = true_postives / actual_totals
+        
+        print(f"\nPipeline True Positives for each class:\n {true_postives}", file=file)
+        print(f"\nPipeline True Positives rate for each class:\n {tpr}", file=file)
+        
+        pip_scores_cross = cross_val_score(pipeline, X_train, y_train, cv=cv, scoring='accuracy')
+        
+        # We print the F1 score here
+        print("\nAverage Pipeline cross-validation score: ", np.mean(pip_scores_cross), file=file)
+        
+        # Display F1 scores for each class
+        for i, score in enumerate(pip_scores_cross):
+            print(f"Pipeline cross validation score for class {i}: {pip_scores_cross}", file=file)
+
+        # Step 5: Calculate ROC AUC score
+        y_score = pipeline.predict_proba(X_test)
+        roc_auc = roc_auc_score(y_test, y_score, multi_class='ovr')
+        print(f"Pipeline RFECV into DT into GNB ROC AUC Score: {roc_auc:.2f}", file=file)
+
+        # Compute ROC curve and AUC
+        fpr, tpr, thresholds = roc_curve(y_test, y_pred_pipeline, pos_label=1)
+        roc_auc = auc(fpr, tpr)
+
+        # Plot ROC curve
+        plt.figure()
+        plt.plot(fpr, tpr, color='blue', label=f'ROC curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='gray', linestyle='--', label='Random Guess')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Pipeline Receiver Operating Characteristic (ROC) Curve')
+        plt.legend(loc='lower right')
+        plt.show()
+
         optimal_params = {
             'dt__criterion': ['gini'],       
             'dt__max_depth': [None],
@@ -1153,12 +1340,19 @@ class RFECV_EXPERIMENT:
                                    
         stacking_clf = StackingClassifier(estimators=base_models, final_estimator=meta_classifier, passthrough=True )
         # Perform grid search
-        stacking_clf = GridSearchCV(estimator=stacking_clf, param_grid=optimal_params, cv=5, scoring='accuracy')
+        stacking_clf = GridSearchCV(estimator=stacking_clf, param_grid=optimal_params, cv=5, scoring='accuracy', return_train_score=True)
+        # train on the RFECV selected critical features
         stacking_clf.fit(X_train_selected, y_train)
+        # train on the whole dataset 
+        #stacking_clf.fit(X_train, y_train)
         end_time = time.time()
         print(f"\nDT with GNB Stacking Classifier training time: {end_time - start_time:.6f} seconds", file=file)
         
         meta_feature_train = stacking_clf.transform(X_test_selected)
+        
+        stacking_features = stacking_clf.cv_results_['rank_test_score']
+        
+        print("Stacking features score: ", stacking_features, file=file)
        
         stacking_cv_scores = stacking_clf.cv_results_["mean_test_score"]
         # Perform paired t-test
@@ -1168,8 +1362,9 @@ class RFECV_EXPERIMENT:
         print(f"Stacking vs RFECV T-Statistic: {t_stat}, P-Value: {p_value}", file=file)
 
         # Best parameters and score
-        print(f"\nStacking Classifier Best Parameters: {stacking_clf.best_params_}", file=file)
+        #print(f"\nStacking Classifier Best Parameters: {stacking_clf.best_params_}", file=file)
         print(f"Stacking Classifier Best Accuracy: {stacking_clf.best_score_}", file=file)
+        print(f"Stacking Classifier CV Scores: {stacking_cv_scores}", file=file)
 
         # Perform cross-validation
         cv_scores = cross_val_score(stacking_clf, X, y, cv=5, scoring='accuracy')
@@ -1188,17 +1383,17 @@ class RFECV_EXPERIMENT:
         ols_model = sm.OLS(y_test, X_selected_with_const).fit()
 
         # Step 6: Print OLS summary
-        print(f"\nRFECV in DT with GNB {ols_model.summary()}", file=file)
+        print(f"\nRFECV in DL DT with GNB {ols_model.summary()}", file=file)
 
         # Plot observed vs regression results
         plt.figure(figsize=(8, 6))
-        plt.scatter(X_selected_with_const[:, 1], y_test, label="DT with GNB Observed", color="blue", alpha=0.6)
+        plt.scatter(X_selected_with_const[:, 1], y_test, label="RFECV in DT with GNB Observed", color="blue", alpha=0.6)
         plt.plot(X_selected_with_const[:, 1], y_pred_stacking, label="Regression Line", color="red", linewidth=2)
         plt.xlabel("Independent Variable (X)")
         plt.ylabel("Dependent Variable (y)")
         plt.title("Observed vs Regression Results")
         plt.legend()
-        plt.grid(True)
+        plt.grid(False)
         plt.show()
 
         print("\nStacking Classifier DT with GNB Accuracy:", accuracy_score(y_test, y_pred_stacking), file=file)
@@ -1263,9 +1458,9 @@ class RFECV_EXPERIMENT:
         print(f"\nStacking Classification True Positives rate for each class:\n {tpr}", file=file)
         
         # Step 6: Retrieve the best model and evaluate
-        best_model = stacking_clf.cv_results_
+        # best_model = stacking_clf.cv_results_
         
-        print(f"Best Parameters: {best_model}", file=file)
+        # print(f"Best Parameters: {best_model}", file=file)
         print(f"Best Score: {stacking_clf.best_score_}", file=file)
 
         num_classes = cm.shape[0]
@@ -1415,13 +1610,13 @@ class Data_Analysis:
         length = data_scaled.Length
         
         stat, p = mannwhitneyu(source, features, alternative='two-sided')
-        print(f"\nMann-Whitney U Test Statistic on Source and Features: {stat}, p-value: {p:.6f}")
+        print(f"\nMann-Whitney U Test Statistic on Source and Features: {stat}, p-value: {p:.6f}", file=file)
         stat, p = mannwhitneyu(destination, features, alternative='two-sided')
-        print(f"Mann-Whitney U Test Statisticon on destination and feature: {stat}, p-value: {p:.6f}")
+        print(f"Mann-Whitney U Test Statisticon on destination and feature: {stat}, p-value: {p:.6f}", file=file)
         stat, p = mannwhitneyu(protocol, features, alternative='two-sided')
-        print(f"Mann-Whitney U Test Statistic on protocol and features: {stat}, p-value: {p:.6f}")
+        print(f"Mann-Whitney U Test Statistic on protocol and features: {stat}, p-value: {p:.6f}", file=file)
         stat, p = mannwhitneyu(length ,features, alternative='two-sided')
-        print(f"Mann-Whitney U Test Statistic on length and features: {stat}, p-value: {p:.6f}")
+        print(f"Mann-Whitney U Test Statistic on length and features: {stat}, p-value: {p:.6f}", file=file)
     
     def tTest_NFeatures(self, data_scaled, features, selected_features_names, file):
         feature = pd.DataFrame(features, columns = selected_features_names)
@@ -1513,7 +1708,7 @@ class Data_Analysis:
                     plt.ylabel('Y')
                     plt.title(f"Source Address and {name} OLS Regression: Observed vs Predicted")
                     plt.legend()
-                    plt.grid(True)
+                    plt.grid(False)
                     plt.show()
                     # Now repeat the linear regression with the Length variable
                     x = length
@@ -1536,7 +1731,7 @@ class Data_Analysis:
                     plt.ylabel('Y')
                     plt.title(f"Length and {name} OLS Regression: Observed vs Predicted")
                     plt.legend()
-                    plt.grid(True)
+                    plt.grid(False)
                     plt.show()
                     i = i+1
                 elif (i == index):
@@ -1564,7 +1759,7 @@ class Data_Analysis:
         plt.ylabel('Y')
         plt.title('Length OLS Regression: Observed vs Predicted')
         plt.legend()
-        plt.grid(True)
+        plt.grid(False)
         plt.show()
                 
 
@@ -1636,12 +1831,27 @@ class ComputeModelMetrics:
         averagte_tn = np.mean(true_negatives)
         average_tp = np.mean(true_positives)
         
-        # Evalute the fn_rates using the z-test
-        hypothesized_fnr = 0.25  # Hypothesized false negative rate
+        # Evalute the fn_rates and fp_rates using the z-test
+        hypothesized_fnr = 0.25  # Hypothesized false negative rate or false positive rate
         sample_size = features
-        # Calculate the standard error
+        # Calculate the standard error for the false negative rate
         std_error = np.sqrt((hypothesized_fnr * (1 - hypothesized_fnr)) / sample_size)
 
+        # Calculate the z-statistic for the false positiver rate
+        z_statistic = (average_fpr - hypothesized_fnr) / std_error
+
+        # Calculate the p-value (two-tailed test)
+        p_value = 2 * (1 - norm.cdf(abs(z_statistic)))
+
+        # Output results
+        print(f"\n{model} Z-Statistic: {z_statistic:.4f} P-Value: {p_value:.4f}", file=file)
+
+        # Interpretation
+        if p_value < 0.05:
+            print("The difference in FPR is statistically significant (p < 0.05).", file=file)
+        else:
+            print("The difference in FPR is not statistically significant (p >= 0.05).", file=file)
+        
         # Calculate the z-statistic
         z_statistic = (average_fnr - hypothesized_fnr) / std_error
 
@@ -1649,20 +1859,19 @@ class ComputeModelMetrics:
         p_value = 2 * (1 - norm.cdf(abs(z_statistic)))
 
         # Output results
-        print(f"\n{model} Z-Statistic: {z_statistic:.4f}", file=file)
-        print(f"P-Value: {p_value:.4f}", file=file)
+        print(f"\n{model} Z-Statistic: {z_statistic:.4f} P-Value: {p_value:.4f}", file=file)
 
         # Interpretation
         if p_value < 0.05:
             print("The difference in FNR is statistically significant (p < 0.05).", file=file)
         else:
             print("The difference in FNR is not statistically significant (p >= 0.05).", file=file)
-        
+
         print(f"\n{model} Average FPR: {average_fpr}", file=file)
         print(f"{model} Average FNR: {average_fnr}", file=file)
         
         print(f"\n{model} Average True Postive for each class: {average_tp}\n", file=file)
-        print(f"\n{model} Average True Negative Rates for each class: {averagte_tn}\n", file=file)
+        #print(f"\n{model} Average True Negative Rates for each class: {averagte_tn}\n", file=file)
         print(f"\n{model} True Negative Rates for each class:\n{tn_rates}", file=file)
         print(f"\n{model} False Negative Rates for each class:\n{fn_rates}", file=file)
         print(f"\n{model} False Positive Rates for each class:\n{fp_rates}", file=file)
@@ -1685,7 +1894,7 @@ def main():
     try:
         data_results, analysis_file = feature_selection.open_file()
         data = data_results
-        file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/rfecv_dt_gnb_wPorts_5.txt", "a")
+        file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/rfecv_dt_gnb_wPorts_12.txt", "a")
         #file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/output.txt", "a")
         # for debuging
         #file = open("C:/PhD/DIS9903A/ConductExperiment/DataCollection/Source/output.txt", "a")
@@ -1696,20 +1905,17 @@ def main():
        
         alpha = pg.cronbach_alpha(data=df, ci=.99)
         print(f"First three Scaled Data Cronbach alpha: {alpha}", file=file)
-        print(f"First three Scaled Data Cronbach alpha: {alpha}")
         
         #calculate Cronbach's Alpha and corresponding 99% confidence interval
         df = data_scaled[['Length', 'info_converted']]
        
         alpha = pg.cronbach_alpha(data=df, ci=.99)
         print(f"Length and Info Scaled Data Cronbach alpha: {alpha}", file=file)
-        print(f"Length and Info Scaled Data Cronbach alpha: {alpha}")
         
         df = data[['Source_address', 'Destination_address']]
        
         alpha = pg.cronbach_alpha(data=df, ci=.99)
         print(f"Data Cronbach alpha: {alpha}", file=file)
-        print(f"Data Cronbach alpha: {alpha}")
         
         df1 = data[['Source_address', 'Destination_address']]
         # Since the data violates normal distribution use the Spearman-brown test for 
@@ -1723,8 +1929,6 @@ def main():
 
         # Apply the Spearman-Brown prophecy formula
         spearman_brown_reliability = 2 * correlation / (1 + correlation)
-        print(f"\nData Pearson Correlation: {correlation:.4f}")
-        print(f"Data Spearman-Brown Reliability: {spearman_brown_reliability:.4f}")
         print(f"Data Pearson Correlation: {correlation:.4f}", file=file)
         print(f"Data Spearman-Brown Reliability: {spearman_brown_reliability:.4f}", file=file)
         
@@ -1740,8 +1944,6 @@ def main():
 
         # Apply the Spearman-Brown prophecy formula
         spearman_brown_reliability = 2 * correlation / (1 + correlation)
-        print(f"\nData Scaled Pearson Correlation: {correlation:.4f}")
-        print(f"Data Scaled Spearman-Brown Reliability: {spearman_brown_reliability:.4f}")
         print(f"Data Scaled Pearson Correlation: {correlation:.4f}", file=file)
         print(f"Data Scaled Spearman-Brown Reliability: {spearman_brown_reliability:.4f}", file=file)
         
@@ -1751,9 +1953,6 @@ def main():
         # Using the spearman ranking test
         # Perform Spearman rank correlation test
         correlation, p_value = spearmanr(x, y)
-
-        print(f"\nData Spearman ranking correlation coefficient: {correlation}, P-value: {p_value:.6f}")
-        
         print(f"Data Spearman ranking correlation coefficient: {correlation}, P-value: {p_value:.6f}", file=file)
 
         x = data_scaled['Source_address']
@@ -1762,7 +1961,6 @@ def main():
         # Perform Spearman rank correlation test
         correlation, p_value = spearmanr(x, y)
 
-        print(f"Data Scaled Spearman ranking correlation coefficient: {correlation}, P-value: {p_value:.0f}")
         print(f"Data Scaled Spearman ranking correlation coefficient: {correlation}", file=file)
         print(f"Data Scaled P-value: {p_value:.6f}", file=file)
         
@@ -1772,7 +1970,6 @@ def main():
         for i in range(l):
             x = data_scaled.iloc[:,i]
             correlation, p_value = spearmanr(x, y)
-            print(f"Data Scaled Spearman ranking correlation coefficient: {correlation}, P-value: {p_value:.6f}")
             print(f"Data Scaled Spearman ranking correlation coefficient: {correlation}, P-value: {p_value:.6f}", file=file)
            
 
@@ -1796,7 +1993,6 @@ def main():
         
         omega = om_metric.calculate_mcdonalds_omega(y)
         print(f"\nMcDonald's Omega: {omega:.4f}", file=file)
-        print(f"McDonald's Omega: {omega:.4f}")
 
         group1 = data_scaled['Source_address']
         group2 = data_scaled['Destination_address']
@@ -1810,19 +2006,19 @@ def main():
         
         row_count = len(data_scaled)
         print(f"Number of rows: {row_count}", file=file)
-        mean1 = data['Source_address'].mean()
-        mean2 = data['Destination_address'].mean()
-        mean3 = data['protocol_converted'].mean()
-        mean4 = data['Length'].mean()
-        mean5 = data['info_converted'].mean()
+        mean1 = statistic.mean(data['Source_address'])
+        mean2 = statistic.mean(data['Destination_address'])
+        mean3 = statistic.mean(data['protocol_converted'])
+        mean4 = statistic.mean(data['Length'])
+        mean5 = statistic.mean(data['info_converted'])
         
         print(f"Datasets Mean: {mean1} {mean2} {mean3} {mean4} {mean5}", file=file)
         
-        std1 = data['Source_address'].std()
-        std2 = data['Destination_address'].std()
-        std3 = data['protocol_converted'].std()
-        std4 = data['Length'].std()
-        std5 = data['info_converted'].std()
+        std1 = statistic.stdev(data['Source_address'])
+        std2 = statistic.stdev(data['Destination_address'])
+        std3 = statistic.stdev(data['protocol_converted'])
+        std4 = statistic.stdev(data['Length'])
+        std5 = statistic.stdev(data['info_converted'])
         
         print(f"Standard Deviation: {std1} {std2} {std3} {std4} {std5}", file=file)
         
@@ -1878,7 +2074,6 @@ def main():
         print("\nTwo-group t-test for Source Address and RFECV features and DT with GNB features identified", file=file)
         t_stat, p_value = ttest_ind(group.iloc[:,0], y_pred_stacking)
         print(f"T-statistic: {t_stat}, P-value: {p_value:.6f}", file=file)
-        print(f"T-statistic: {t_stat}, P-value: {p_value:.6f}")
         if p_value < 0.05:
               print("Significant differences exist between the groups.", file=file)
         else:
@@ -1886,24 +2081,14 @@ def main():
         
         stat, p = wilcoxon(group3.iloc[:,1], y_pred_stacking, alternative='two-sided')
         print(f"Two-Sided Wilcox Signed Rank T-statistic: {stat}, P-value: {p:.6f}", file=file)
-        print("Two-Sided Wilcox Signed Rank T-statistic:", stat)
-        print("P-value:", p)
         
         d2 = np.round(group3.iloc[:,1] - y_pred_stacking, decimals=3)
         stat, p = wilcoxon(d2, alternative='greater')
         print(f"Greater Wilcox Signed Rank T-statistic: {t_stat}, P-value: {p_value:.6f}", file=file)
-        print(f"Greater Wilcox Signed Rank T-statistic: {t_stat}, P-value: {p_value:.6f}")
         
         correlation, p_value = spearmanr(group3.iloc[:,1], y_pred_stacking)
         print(f"\nEnsembled Model Spearman ranking correlation coefficient: {correlation}, P-value: {p_value}", file=file)
 
-        # index = len(selected_features_names)
-        # if (index > 1):
-        #     data_analysis.olsTest_NFeature(data_scaled, features, selected_features_names, file)
-        # else:
-        #     data_analysis.olsTest_SingleFeature(data_scaled, features, selected_features_names, file)
-           
-        
         feature_selection.stop_all(file)
         file.close()
         
