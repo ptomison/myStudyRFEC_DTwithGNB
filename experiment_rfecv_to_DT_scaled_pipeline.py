@@ -250,7 +250,7 @@ class RFECV_EXPERIMENT:
         kruskal_results = {}
         for i, feature in enumerate(selected_features):
             # Group data by target classes
-            groups = [X_selected[y_test == label, i] for label in np.unique(y_test)]
+            groups = [X_selected[i] for label in np.unique(y_test)]
             # Perform ANOVA and Kruskal-Wallis
             f_stat, p_value = f_oneway(*groups)
             k_stat, kp_value = kruskal(*groups)
@@ -2100,3 +2100,4 @@ if __name__ == '__main__':
     main()
 
     
+
